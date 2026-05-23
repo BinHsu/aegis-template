@@ -1,0 +1,40 @@
+name: Security Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Secret-residue scan: block .env files in the tree ──
+      - name: No .env files committed
+        run: |
+          if git ls-files | grep -E '\.env(\.local|\.production|\.staging)?$'; then
+            echo "::error::.env file is tracked — move secrets to env/secrets manager (SECURITY.md §1)"
+            exit 1
+          fi
+          echo "OK: no .env files tracked"
+
+      # ── Hardcoded-secret content scan on the diff ──
+      - name: No hardcoded secrets
+        run: |
+          PATTERN='(api[_-]?key|secret|token|password)\s*[:=]\s*["'"'"'][a-zA-Z0-9]{16,}'
+          AKIA='AKIA[0-9A-Z]{16}'
+          if git grep -nE "$PATTERN|$AKIA" -- ':!*.example' ':!.github/*'; then
+            echo "::error::possible hardcoded secret — see SECURITY.md §1"
+            exit 1
+          fi
+          echo "OK: no obvious hardcoded secrets"
+
+      # ── Placeholders — wire up per stack ──
+      # - name: Lint            # eslint/ruff/golangci-lint with security rules
+      #   run: <your lint cmd>
+      # - name: Dependency audit # npm audit / pip-audit / cargo audit (reject high/critical)
+      #   run: <your audit cmd>
+      # - name: Security benchmark  # cross-user isolation / rate-limit / destructive-gated
+      #   run: <your benchmark cmd>
