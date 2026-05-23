@@ -32,7 +32,8 @@ to other users. For every one, you MUST:
 
 **Destructive actions must never be hidden.** A "done" that quietly deleted files, or a
 default-destructive script that needs `--dry-run` to preview (order reversed), is a
-product red line.
+product red line. The full rationale + red-line list is in `PRODUCT_SENSE.md`; route
+destructive shell commands through `scripts/safe-exec.sh` (preview → confirm → log → exec).
 
 ## Workflow
 

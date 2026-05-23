@@ -20,6 +20,7 @@ async-decoupled / stateful), and its calibration (e.g. "production-shape at PoC 
 
 - **First-time reader:** README → SECURITY.md → this file → `docs/` design notes.
 - **Code review / audit:** SECURITY.md → the diff → tests.
+- **Before any destructive action:** `PRODUCT_SENSE.md` (red lines) + `scripts/safe-exec.sh`.
 - **Conflict-resolution rule:** if this file and a doc disagree, the more-recent /
   more-specific wins; flag the drift rather than silently picking one.
 

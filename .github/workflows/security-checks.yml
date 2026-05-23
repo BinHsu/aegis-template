@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 6 * * *"   # daily baseline run
 
 jobs:
   security:
@@ -11,30 +13,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Secret-residue scan: block .env files in the tree ──
-      - name: No .env files committed
-        run: |
-          if git ls-files | grep -E '\.env(\.local|\.production|\.staging)?$'; then
-            echo "::error::.env file is tracked — move secrets to env/secrets manager (SECURITY.md §1)"
-            exit 1
-          fi
-          echo "OK: no .env files tracked"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      # ── Hardcoded-secret content scan on the diff ──
-      - name: No hardcoded secrets
-        run: |
-          PATTERN='(api[_-]?key|secret|token|password)\s*[:=]\s*["'"'"'][a-zA-Z0-9]{16,}'
-          AKIA='AKIA[0-9A-Z]{16}'
-          if git grep -nE "$PATTERN|$AKIA" -- ':!*.example' ':!.github/*'; then
-            echo "::error::possible hardcoded secret — see SECURITY.md §1"
-            exit 1
-          fi
-          echo "OK: no obvious hardcoded secrets"
+      # ── Practice 5: secret-residue scan (real, runnable) ──
+      - name: Cleanup scanner (secrets / .env residue)
+        run: python3 scripts/cleanup-scanner.py
 
-      # ── Placeholders — wire up per stack ──
-      # - name: Lint            # eslint/ruff/golangci-lint with security rules
-      #   run: <your lint cmd>
-      # - name: Dependency audit # npm audit / pip-audit / cargo audit (reject high/critical)
-      #   run: <your audit cmd>
-      # - name: Security benchmark  # cross-user isolation / rate-limit / destructive-gated
-      #   run: <your benchmark cmd>
+      # ── Practice 4: promoted pattern checks (semgrep) ──
+      - name: Semgrep (promoted review rules)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: .semgrep/
+
+      # ── Practice 7: tool-registry audit ──
+      - name: Tool-registry audit
+        run: |
+          if command -v yq >/dev/null 2>&1 && [ -f tools/registry.yaml ]; then
+            bash scripts/audit-tool-registry.sh
+          else
+            echo "yq or registry not present — skipping (install yq to enable)"
+          fi
+
+      # ── Practice 5: security benchmark ──
+      - name: Security benchmark
+        run: python3 scripts/security-benchmark.py
+
+      # ── Dependency audit — wire per stack (uncomment the matching one) ──
+      # - run: npm audit --audit-level=high
+      # - run: pip-audit --strict
+      # - run: cargo audit --deny warnings
+      # - run: govulncheck ./...
+
+      # ── Lint with security rules — wire per stack ──
+      # - run: npm run lint
+      # - run: ruff check . && mypy .
+      # - run: golangci-lint run

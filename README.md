@@ -1,37 +1,66 @@
 # aegis-template
 
-> **Secure-by-default starter scaffold.** A GitHub *template repository* (not a fork) — "Use this template" copies these files into a fresh repo with a clean first commit. Every new project starts with the security harness already baked in: the friction differential does the persuasion, not a checklist nobody reads.
+> **Secure-by-default starter scaffold + DevSecOps reference implementation.** A GitHub
+> *template repository* (not a fork) — "Use this template" copies these files into a fresh
+> repo with a clean first commit. Every new project starts with the full security harness
+> baked in: the friction differential does the persuasion, not a checklist nobody reads.
 
-## What's baked in
+This is a complete implementation of the **Harness Engineering 7 security practices**
+(see `knowledge/harness_engineering_agent_security_7_practices.md` in the 2026Job repo),
+organized in three layers: **Rule → Execution → Verification.**
 
-| File | Purpose | Harness practice |
-|---|---|---|
-| `CLAUDE.md` | Project-level agent rules. **References `~/.claude/CLAUDE.md` for cross-project disciplines** (does not duplicate them). | Rule layer |
-| `AGENTS.md` | Multi-agent rules (Cursor / Devin / Copilot). Claude Code reads it via the `@AGENTS.md` import in `CLAUDE.md`. | Rule layer |
-| `SECURITY.md` | The rules agents must not guess at — 4 categories: secrets, untrusted input, external actions, dependencies. | Rule layer |
-| `.claude/settings.json` | Least-privilege tool access — allowlist + denylist (destructive commands default-deny). | Execution layer |
-| `.claude/rules/` | Path-scoped rules, loaded on demand (e.g. terraform-only, tests-only). | Execution layer |
-| `.github/workflows/security-checks.yml` | CI: secret scan + lint + (placeholder) benchmark. Security in the pipeline, not just review. | Verification layer |
-| `.gitignore` | Defense-in-depth: `.env*`, secrets, `CLAUDE.local.md`, TF state, keys. | Execution layer |
+## The 7 practices → files in this repo
 
-The three layers map to the harness mental model: **Rule → Execution → Verification** (see `knowledge/harness_engineering_agent_security_7_practices.md` in the 2026Job repo).
+| # | Practice | Layer | Files |
+|---|---|---|---|
+| 1 | **Least-privilege tool access** | Execution | `.claude/settings.json` (allow/deny), `AGENTS.md` (3-way tool table) |
+| 2 | **Security rules not buried mid-file** | Rule | `CLAUDE.md` (router, points to global), `SECURITY.md` at top; `scripts/audit-agent-compliance.sh` (monthly drift test) |
+| 3 | **SECURITY.md pins the rules** | Rule | `SECURITY.md` (4 categories: secrets / untrusted input / external actions / dependencies) |
+| 4 | **Sandbox isolation + review-feedback promotion** | Execution / Verification | `.githooks/pre-commit` (secret block), `.semgrep/` (promoted review rules), CI runs them |
+| 5 | **Security in the benchmark, not just review** | Verification | `scripts/security-benchmark.py`, `scripts/cleanup-scanner.py`, `.github/workflows/security-checks.yml` |
+| 6 | **Hidden destructive actions = product red line** | Rule / Execution | `PRODUCT_SENSE.md` (protocol), `scripts/safe-exec.sh` (preview→confirm→log→exec), `.agent-context/destructive-log.jsonl` |
+| 7 | **Tool safety is production-grade** | Execution | `tools/registry.yaml` (single source of truth), `scripts/audit-tool-registry.sh` |
+
+Cross-cutting: `docs/THREAT_MODEL.md` (Practice 3/4 — entry required for auth/crypto/payments/PII surfaces).
+
+## What's runnable today (stack-agnostic)
+
+- `python3 scripts/cleanup-scanner.py` — real secret-residue scan (exit 1 on finding)
+- `bash scripts/safe-exec.sh rm -rf foo` — destructive-command preview + confirm + log
+- `bash scripts/audit-tool-registry.sh` — tool-layer hole detection (needs `yq`)
+- `.githooks/pre-commit` — enable with `git config core.hooksPath .githooks`
+- CI (`security-checks.yml`) — wires cleanup-scanner + semgrep + registry-audit + benchmark
+
+**Stubs to specialise per stack:** `security-benchmark.py` (3 baseline benchmarks are stubs),
+the dependency-audit + lint steps in CI (uncomment the matching language), the
+`{{placeholders}}` in `SECURITY.md` / `CLAUDE.md` / `THREAT_MODEL.md`.
+
+## Cross-project rules live in `~/.claude/CLAUDE.md`
+
+Language · date · bash · safety guardrails (a/h/i/k/m) · externalize-decisions ·
+pre-push-diff · non-host-install · reusable-PII · AWS-tech-blog tone · subagent-delegation ·
+no-hallucination — these load globally and are **not** duplicated in this template. The
+template's `CLAUDE.md` points to them and `@import`s `AGENTS.md` (Claude Code does not read
+AGENTS.md on its own).
 
 ## How to use
 
 1. On GitHub: Settings → check **"Template repository"**.
-2. New project → **"Use this template"** → fresh repo, clean history, harness inherited.
-3. Fill the `{{PLACEHOLDER}}` spots in `CLAUDE.md` / `SECURITY.md` with your stack specifics.
-4. Pick an archetype direction (stateless-sync / async-decoupled / stateful) and add the workload code.
+2. New project → **"Use this template"** → fresh repo, clean history, full harness inherited.
+3. `git config core.hooksPath .githooks` ; fill the `{{PLACEHOLDER}}` spots.
+4. Pick an archetype direction (stateless-sync / async-decoupled / stateful), add workload code,
+   wire the CI dependency-audit + lint steps for your language, specialise the benchmark stubs.
 
 ## Relationship to the aegis archetype ecosystem
 
-This is the **base scaffold** that the workload archetypes share. Specialise it:
+Base scaffold the workload archetypes share. Specialise into:
 - **stateless sync** (greeter-style) — Deployment, shared cluster, namespace isolation
-- **async-decoupled** (enclave-style) — + SQS/queue compute decoupling
+- **async-decoupled** (enclave-style) — + queue compute decoupling
 - **stateful** (statefulset-style) — StatefulSet + persistent storage
 
-The platform substrate (landing-zone account fabric + platform tier) is consumed via a standard interface, so a workload can be promoted from shared-cluster to dedicated-cluster without rewriting its platform integration.
+Platform substrate (landing-zone + platform tier) consumed via a standard interface, so a
+workload promotes from shared-cluster to dedicated-cluster without rewriting its integration.
 
 ---
 
-*v0 scaffold — refine per actual use.*
+*DevSecOps reference implementation — v1. Specialise per actual use.*

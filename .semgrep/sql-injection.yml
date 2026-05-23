@@ -1,0 +1,31 @@
+# .semgrep/sql-injection.yml — Practice 4 (Review-Feedback Promotion).
+# Example of a recurring review comment promoted to an automated check:
+#   "use a parameterized query here, not string concat" → this rule.
+# Add a new rule each time the same security comment appears 3× in PR reviews.
+# Run: semgrep --config .semgrep/   (wired into CI)
+rules:
+  - id: raw-sql-string-concat
+    languages: [python, javascript, typescript, go]
+    severity: ERROR
+    message: >
+      Build SQL with parameterized statements, not string concatenation /
+      interpolation. See SECURITY.md §2.
+    pattern-either:
+      # JS/TS: db.query("..." + x) or template literal with interpolation
+      - pattern: $DB.query("..." + $X)
+      - pattern: $DB.query(`...${$X}...`)
+      # Python: cursor.execute("..." % x) or f-string / + concat
+      - pattern: $CUR.execute("..." % $X)
+      - pattern: $CUR.execute(f"...{$X}...")
+      - pattern: $CUR.execute("..." + $X)
+
+  - id: shell-exec-with-interpolation
+    languages: [python, javascript, typescript, go]
+    severity: ERROR
+    message: >
+      Do not pass interpolated/concatenated input into a shell. Use argument
+      arrays / proper escaping. See SECURITY.md §2.
+    pattern-either:
+      - pattern: os.system(f"...{$X}...")
+      - pattern: subprocess.$F(f"...{$X}...", shell=True)
+      - pattern: child_process.exec(`...${$X}...`)
