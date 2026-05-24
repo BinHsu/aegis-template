@@ -6,7 +6,8 @@
 > baked in: the friction differential does the persuasion, not a checklist nobody reads.
 
 This is a complete implementation of the **Harness Engineering 7 security practices**
-(see `knowledge/harness_engineering_agent_security_7_practices.md` in the 2026Job repo),
+(see [`docs/SECURITY_PRACTICES.md`](docs/SECURITY_PRACTICES.md) for the per-practice
+rationale; framework adapted from [Wisely Chen](https://ai-coding.wiselychen.com/harness-engineering-security-best-practices/)),
 organized in three layers: **Rule → Execution → Verification.**
 
 ## The 7 practices → files in this repo
