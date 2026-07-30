@@ -1,39 +1,49 @@
-# CLAUDE.md — {{PROJECT_NAME}} (project-level rules)
-
-> **Cross-project disciplines (language, date, bash, safety guardrails a/h/i/k/m,
-> externalize-decisions, pre-push-diff, non-host-install, reusable-PII, no-hallucination)
-> live in `~/.claude/CLAUDE.md` and load globally — they are NOT repeated here.**
-> This file holds only what is specific to THIS repo.
-
 @AGENTS.md
 
-## What this repo is
+# CLAUDE.md — {{PROJECT_NAME}} (Claude-specific only)
 
-{{ONE_PARAGRAPH — what this service/project does, its archetype (stateless-sync /
-async-decoupled / stateful), and its calibration (e.g. "production-shape at PoC scale").}}
+> **All shared agent policy for this repo lives in [`AGENTS.md`](AGENTS.md)**, imported on line 1
+> above. Claude Code does not read `AGENTS.md` on its own, which is the only reason that import
+> exists.
+>
+> **Do not put policy here.** If a rule applies to every agent — safety gates, what may not be
+> committed, decision-record conventions, handoff protocol, tool-access classes — it belongs in
+> `AGENTS.md`. A rule written in both files drifts, and the copy that goes stale is the one that
+> gets read.
+>
+> Cross-project disciplines (language, date handling, bash/zsh word-splitting, safety guardrails,
+> externalize-decisions, pre-push-diff, non-host-install, reusable-PII, no-hallucination,
+> subagent-delegation) live in `~/.claude/CLAUDE.md` and load globally. They are **not** repeated
+> here either.
 
-## Files and their roles
+This file holds only what is specific to Claude Code as a tool.
 
-{{TABLE — key files + what each is for. Keep it a map a new agent can navigate from.}}
+## Permissions
 
-## Where to start (by role)
+Least-privilege allow/deny lists are enforced in `.claude/settings.json`. The three-way
+classification they implement is defined in `AGENTS.md`, not here — settings are the *mechanism*,
+`AGENTS.md` is the *rule*.
 
-- **First-time reader:** README → SECURITY.md → this file → `docs/` design notes.
-- **Code review / audit:** SECURITY.md → the diff → tests.
-- **Before any destructive action:** `PRODUCT_SENSE.md` (red lines) + `scripts/safe-exec.sh`.
-- **Conflict-resolution rule:** if this file and a doc disagree, the more-recent /
-  more-specific wins; flag the drift rather than silently picking one.
+## Delegation boundary
 
-## Repo-specific rules
+- Keep the main session for orchestration, decisions and merge-gating. Delegate independent,
+  citation-driven or multi-file work.
+- **Work needing interactive per-action approval stays in the main session.** A subagent cannot
+  reliably obtain fresh approval, so a permission-gated call can fail silently.
+- Name the model when spawning and pick it by stakes: triage and read fan-out → cheap tier;
+  exploration and light synthesis → mid tier; cross-file reasoning and decide-what-to-change → top
+  tier. An expensive model watching logs scroll is waste — polling is a mechanism job, not an agent
+  job.
+- **Never read a spawned subagent's `.output` file via the shell.** It is the full JSONL
+  conversation transcript and will overflow context. Use the agent's returned result.
 
-{{Add only repo-specific constraints here, e.g.:
-- public/private boundary (which buyer/private names must NOT appear in committed files)
-- archetype-specific isolation posture (namespace vs node-group vs dedicated cluster)
-- domain conventions (ADR numbering, runbook format, etc.)
-Anything cross-project belongs in ~/.claude/CLAUDE.md, not here.}}
+## Conflict resolution
 
-## ADR conventions (if this is a build repo)
+If two documents disagree, the more recent and more specific wins — but record the drift in
+`docs/handoff/CURRENT.md` rather than silently picking one.
 
-Decisions recorded as ADRs under `docs/ADR/` (MADR format — context / options /
-decision / consequences). Deleted/superseded ADR numbers are left as gaps (receipts of
-human iteration); `docs/ADR/INDEX.md` routes by reader goal.
+## {{Anything else Claude-specific}}
+
+{{e.g. a hook that must exist for this repo, an MCP server this repo depends on and why it must be
+called rather than answered from memory, a repo-local skill. Delete this section if it stays empty —
+an empty placeholder is worse than no section.}}

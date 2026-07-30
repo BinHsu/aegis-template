@@ -15,14 +15,30 @@ organized in three layers: **Rule → Execution → Verification.**
 | # | Practice | Layer | Files |
 |---|---|---|---|
 | 1 | **Least-privilege tool access** | Execution | `.claude/settings.json` (allow/deny), `AGENTS.md` (3-way tool table) |
-| 2 | **Security rules not buried mid-file** | Rule | `CLAUDE.md` (router, points to global), `SECURITY.md` at top; `scripts/audit-agent-compliance.sh` (monthly drift test) |
+| 2 | **Security rules not buried mid-file** | Rule | `AGENTS.md` (primary policy, all agents), `CLAUDE.md` (thin Claude-only router), `SECURITY.md` at top; `scripts/audit-agent-compliance.sh` (monthly drift test) |
 | 3 | **SECURITY.md pins the rules** | Rule | `SECURITY.md` (4 categories: secrets / untrusted input / external actions / dependencies) |
 | 4 | **Sandbox isolation + review-feedback promotion** | Execution / Verification | `.githooks/pre-commit` (secret block), `.semgrep/` (promoted review rules), CI runs them |
 | 5 | **Security in the benchmark, not just review** | Verification | `scripts/security-benchmark.py`, `scripts/cleanup-scanner.py`, `.github/workflows/security-checks.yml` |
 | 6 | **Hidden destructive actions = product red line** | Rule / Execution | `PRODUCT_SENSE.md` (protocol), `scripts/safe-exec.sh` (preview→confirm→log→exec), `.agent-context/destructive-log.jsonl` |
 | 7 | **Tool safety is production-grade** | Execution | `tools/registry.yaml` (single source of truth), `scripts/audit-tool-registry.sh` |
 
-Cross-cutting: `docs/THREAT_MODEL.md` (Practice 3/4 — entry required for auth/crypto/payments/PII surfaces).
+Cross-cutting: `docs/THREAT_MODEL.md` (Practice 3/4 — entry required for auth/crypto/payments/PII
+surfaces) and `docs/handoff/CURRENT.md` (single source of project status, and the file that lets a
+cold agent or human resume with no chat history).
+
+## AGENTS.md is primary; CLAUDE.md is thin
+
+`AGENTS.md` holds all shared policy for every agent and human. `CLAUDE.md` imports it on **line 1**
+and contains nothing but Claude-specific mechanics — permissions, delegation boundary, transcript
+handling. Claude Code does not read `AGENTS.md` on its own, which is the only reason the import
+exists.
+
+A rule written in both files drifts, and the copy that goes stale is the one that gets read. So:
+shared rule → `AGENTS.md`; Claude-only mechanism → `CLAUDE.md`; machine-wide discipline →
+`~/.claude/CLAUDE.md`.
+
+The same principle governs status, which is written **only** in `docs/handoff/CURRENT.md`. A stale
+status banner in a README is worse than none, because it is read with confidence.
 
 ## What's runnable today (stack-agnostic)
 
@@ -48,7 +64,8 @@ AGENTS.md on its own).
 
 1. On GitHub: Settings → check **"Template repository"**.
 2. New project → **"Use this template"** → fresh repo, clean history, full harness inherited.
-3. `git config core.hooksPath .githooks` ; fill the `{{PLACEHOLDER}}` spots.
+3. `git config core.hooksPath .githooks` ; fill the `{{PLACEHOLDER}}` spots in `AGENTS.md`,
+   `CLAUDE.md`, `SECURITY.md`, `THREAT_MODEL.md` and `docs/handoff/CURRENT.md`.
 4. Pick an archetype direction (stateless-sync / async-decoupled / stateful), add workload code,
    wire the CI dependency-audit + lint steps for your language, specialise the benchmark stubs.
 
