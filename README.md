@@ -18,13 +18,19 @@ organized in three layers: **Rule → Execution → Verification.**
 | 2 | **Security rules not buried mid-file** | Rule | `AGENTS.md` (primary policy, all agents), `CLAUDE.md` (thin Claude-only router), `SECURITY.md` at top; `scripts/audit-agent-compliance.sh` (monthly drift test) |
 | 3 | **SECURITY.md pins the rules** | Rule | `SECURITY.md` (4 categories: secrets / untrusted input / external actions / dependencies) |
 | 4 | **Sandbox isolation + review-feedback promotion** | Execution / Verification | `.githooks/pre-commit` (secret block), `.semgrep/` (promoted review rules), CI runs them |
-| 5 | **Security in the benchmark, not just review** | Verification | `scripts/security-benchmark.py`, `scripts/cleanup-scanner.py`, `.github/workflows/security-checks.yml` |
+| 5 | **Security in the benchmark, not just review** | Verification | `scripts/security-benchmark.py`, `scripts/cleanup-scanner.py`, `tests/test_evidence_artifacts.py`, `.github/workflows/security-checks.yml` |
 | 6 | **Hidden destructive actions = product red line** | Rule / Execution | `PRODUCT_SENSE.md` (protocol), `scripts/safe-exec.sh` (preview→confirm→log→exec), `.agent-context/destructive-log.jsonl` |
 | 7 | **Tool safety is production-grade** | Execution | `tools/registry.yaml` (single source of truth), `scripts/audit-tool-registry.sh` |
 
 Cross-cutting: `docs/THREAT_MODEL.md` (Practice 3/4 — entry required for auth/crypto/payments/PII
 surfaces) and `docs/handoff/CURRENT.md` (single source of project status, and the file that lets a
 cold agent or human resume with no chat history).
+
+Two more that are not security controls but keep a cold agent from wasting a day:
+`docs/FILE-MAP.md` (exhaustive per-file index, so nobody re-creates a file that already exists under
+a name they would not have guessed — nagged by a `PostToolUse` hook) and
+`docs/design/acceptance-criteria.md` (how to split criteria into ones an agent can run and ones only
+a person can, so the second kind is still auditable).
 
 ## AGENTS.md is primary; CLAUDE.md is thin
 
@@ -43,14 +49,24 @@ status banner in a README is worse than none, because it is read with confidence
 ## What's runnable today (stack-agnostic)
 
 - `python3 scripts/cleanup-scanner.py` — real secret-residue scan (exit 1 on finding)
+- `python3 tests/test_evidence_artifacts.py` — validate manual-verification records
+- `python3 tests/test_evidence_artifacts.py --self-test` — prove that validator can still fail
+- `python3 scripts/security-benchmark.py` — benchmark status (stubs report `NOT-IMPLEMENTED`)
 - `bash scripts/safe-exec.sh rm -rf foo` — destructive-command preview + confirm + log
-- `bash scripts/audit-tool-registry.sh` — tool-layer hole detection (needs `yq`)
+- `bash scripts/audit-tool-registry.sh` — tool-layer hole detection, exit 1 on finding (needs `yq`)
 - `.githooks/pre-commit` — enable with `git config core.hooksPath .githooks`
-- CI (`security-checks.yml`) — wires cleanup-scanner + semgrep + registry-audit + benchmark
+- CI (`security-checks.yml`) — wires all of the above
 
-**Stubs to specialise per stack:** `security-benchmark.py` (3 baseline benchmarks are stubs),
-the dependency-audit + lint steps in CI (uncomment the matching language), the
-`{{placeholders}}` in `SECURITY.md` / `CLAUDE.md` / `THREAT_MODEL.md`.
+**Stubs to specialise per stack.** Every one of them announces itself rather than reporting a pass —
+`AGENTS.md` §12, the rule this scaffold most needs you to keep:
+
+- `security-benchmark.py` — 3 unimplemented benchmarks; add `--require-implemented` to CI once wired
+- `tools/registry.yaml` — example entries; delete the tools you do not call
+- `.semgrep/` — seed rules; retarget or delete for your languages
+- `docs/validation/evidence/REQUIRED.json` — one example phase; replace with your own
+- the dependency-audit and lint steps in CI (uncomment the matching language)
+- the `{{placeholders}}` in `AGENTS.md` / `SECURITY.md` / `CLAUDE.md` / `THREAT_MODEL.md` /
+  `docs/handoff/CURRENT.md`, and the seeded rows in `docs/FILE-MAP.md`
 
 ## Cross-project rules live in `~/.claude/CLAUDE.md`
 
@@ -68,6 +84,8 @@ AGENTS.md on its own).
    `CLAUDE.md`, `SECURITY.md`, `THREAT_MODEL.md` and `docs/handoff/CURRENT.md`.
 4. Pick an archetype direction (stateless-sync / async-decoupled / stateful), add workload code,
    wire the CI dependency-audit + lint steps for your language, specialise the benchmark stubs.
+5. Rewrite `docs/FILE-MAP.md` as you replace the scaffold — and keep adding a row per new file, in
+   the change that creates it.
 
 ## Relationship to the aegis archetype ecosystem
 

@@ -3,6 +3,11 @@
 # Each entry declares: type, timeout, concurrency, lock, approval gate, audit.
 # A tool-runner wrapper enforces: approval gate → circuit breaker → mutex →
 # timeout → audit log → reset-on-success (see README "Practice 7").
+#
+# SEED CONTENT — the entries below are examples covering common shapes (read-only,
+# write-with-mutex, always-approved, conditionally-destructive). DELETE the ones your
+# project does not call. A registry full of tools nobody invokes audits clean forever
+# and proves nothing: AGENTS.md section 12.
 
 tools:
   - name: read_file

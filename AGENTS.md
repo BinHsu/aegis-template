@@ -16,6 +16,20 @@
 **Assume the next worker has no access to any chat history.** The repository on disk and on its
 remote is the single source of truth. If a fact is not written down, it does not exist.
 
+### Before you create any file: `docs/FILE-MAP.md`
+
+That file is the exhaustive per-file index — every tracked file and directory, one line on what each
+is for. **Check it before creating anything**, because the thing you are about to write may already
+exist under a name you would not have guessed.
+
+**A new file gets its row in the same change that creates it.** A `PostToolUse` hook
+(`scripts/check-file-map.sh`) notices a missing path and says so, but it cannot write the row for
+you. If a file genuinely does not belong in the index, say so explicitly rather than skipping it.
+
+The curated "what to read next" list above is a different job: it routes a reader to the few files
+that matter for a goal. `docs/FILE-MAP.md` lists everything and recommends nothing. Do not merge the
+two.
+
 ---
 
 ## 1. What this repo is
@@ -25,7 +39,10 @@ stateful), and its calibration, e.g. "production-shape at PoC scale".}}
 
 ## 2. Files and their roles
 
-{{TABLE — key files and what each is for. Keep it a map a new agent can navigate from.}}
+{{TABLE — the handful of files a new agent must know about, and what each is for. Keep it short.}}
+
+The exhaustive list is `docs/FILE-MAP.md`. This section is the curated shortlist; that file is the
+manifest. Keep them separate — see "Before you create any file" above.
 
 ## 3. Single source of status
 
@@ -68,10 +85,26 @@ Every capability claim carries a tag for how it is known. Never promote a tag wi
 | `CROSS-CHECKED` | An independent source or implementation agrees |
 | `INFERRED` | Reasoned but not observed — **may not be reported as working** |
 | `BLOCKED` | Waiting on something external |
+| `COMMUNITY` | Stated in a community-maintained source — forum, issue tracker, wiki, blog post, or documentation for a related-but-different product. Weaker than `CROSS-CHECKED`: nobody authoritative stands behind it. Cite the URL and say what kind of source it is |
+| `NO-EVIDENCE-FOUND` | Searched and found nothing. **Record what was searched**, so the next worker does not repeat it |
 | `UNVERIFIED` | Not established. Treat as unknown, not as "probably fine" |
 
-An `INFERRED` row is never a passing test. "It should work" and "the docs say it supports this" are
-both `INFERRED`.
+**`NO-EVIDENCE-FOUND` is not a synonym for `UNVERIFIED`.** `UNVERIFIED` means nobody has looked.
+`NO-EVIDENCE-FOUND` means someone looked, in named places, and came up empty. The distinction is the
+whole value of the tag: without it a settled negative reads as an open question and gets
+re-investigated. A row carrying it must name the sources searched.
+
+**`COMMUNITY` is not a demotion of every non-vendor source.** It is for sources with no authority
+behind them. An independent codebase, specification or datasheet that agrees is still
+`CROSS-CHECKED`.
+
+An `INFERRED`, `COMMUNITY` or `NO-EVIDENCE-FOUND` row is never a passing test — a forum post is not
+a measurement, and finding nothing is not finding a negative. "It should work" and "the docs say it
+supports this" are both `INFERRED`.
+
+Where a claim rests on something a person or an instrument must observe, record it as an evidence
+artifact so a machine can audit the record even though it cannot make the observation —
+`docs/design/acceptance-criteria.md`.
 
 ## 6. Decision records
 
@@ -116,9 +149,9 @@ something, name it explicitly in the handoff.
 | **Destructive** | `rm -rf`, `git push --force`, `git reset --hard`, `drop table`, `kubectl delete`, `terraform apply/destroy` | default-deny, explicit approve each time |
 
 Enforced for Claude Code in `.claude/settings.json`. Other agents: honour this table.
-{{Add any repo-specific destructive operations here — e.g. writing device flash, transmitting on a
-radio, sending an outbound message. If an operation is irreversible or visible to others, it is
-destructive regardless of how small the command looks.}}
+{{Add any repo-specific destructive operations here — e.g. publishing a package, sending an outbound
+message, rotating a shared credential, writing to a device. If an operation is irreversible or
+visible to others, it is destructive regardless of how small the command looks.}}
 
 ## 10. Destructive-action protocol
 
@@ -144,7 +177,33 @@ through `scripts/safe-exec.sh` (preview → confirm → log → exec).
 5. After editing, run the check that would catch the mistake — type-check, lint, test. Bytes written
    is not a passing test.
 
-## 12. Repo-specific rules
+## 12. A check that cannot fail is worse than no check
+
+This scaffold ships stubs. A stub wired into CI reports green from day one and keeps reporting green
+after the thing it was supposed to guard has broken — and it buys false confidence at the exact
+moment someone is deciding whether to look closer.
+
+Before you wire anything into CI, or inherit something already wired:
+
+- **A stub announces itself.** Print `NOT-IMPLEMENTED` or `SKIPPED`, never `OK` or a tick. Never
+  count it in a passed total. `Passed: 3/3` where all three are unwritten is the defect.
+- **A missing prerequisite is a skip, not a pass.** A tool absent from `PATH`, an optional import
+  that failed, a directory that does not exist — say so by name and say which check did not run. A
+  test that silently drops its assertions and still prints "all checks passed" is the same defect in
+  a different costume.
+- **A check that prints a finding must exit non-zero.** Printing `❌` and returning 0 is a check that
+  cannot fail.
+- **A rule targeting code the repo does not contain proves nothing.** Lint and static-analysis rules
+  scoped to absent languages, and registry entries for tools nobody calls, audit clean forever.
+  Retarget or delete them.
+- **Vacuous-pass by default, gate by flag.** Where a check has nothing to inspect yet, let it pass
+  and say the scope was empty, then put the enforcement behind an explicit flag
+  (`--require <phase>`, `--require-implemented`). Without that split it either breaks CI on day one
+  or passes silently forever.
+- **Check the pins.** An archived or deprecated action, image or package keeps working until it does
+  not, and its failure mode is usually a skipped step rather than a red build.
+
+## 13. Repo-specific rules
 
 {{Add only repo-specific constraints here, e.g.:
 - public/private boundary — which names must NOT appear in committed files

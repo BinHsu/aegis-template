@@ -25,5 +25,20 @@
       "Read(./**/*.pem)",
       "Read(./**/*.key)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/check-file-map.sh\" 2>/dev/null || true",
+            "timeout": 10,
+            "statusMessage": "Checking docs/FILE-MAP.md"
+          }
+        ]
+      }
+    ]
   }
 }
