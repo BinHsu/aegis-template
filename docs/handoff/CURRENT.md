@@ -25,6 +25,7 @@ Three-layer rule-book skeleton is on branch `issue-1-three-layer-skeleton`: laye
 
 | Commit | Content |
 |---|---|
+| `5940d67` | Add a three-layer rule-book skeleton and an orphan-refusing checker |
 | `b7b2ded` | Add a per-file index, Codex-runnable acceptance criteria, and fix checks that could not fail |
 
 ## 3. Repository state
@@ -78,9 +79,10 @@ None for `#1`.
 
 ## 9. Exact next safe action
 
-After this branch is committed and pushed:
+Push this branch and open the PR (outward-facing; `#1` close condition):
 
 ```bash
+git push -u origin HEAD
 gh pr create --base main --title "Add three-layer rule-book skeleton and orphan-refusing checker" --body 'Closes #1'
 gh run watch --exit-status
 ```
