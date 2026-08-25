@@ -32,6 +32,13 @@ a name they would not have guessed — nagged by a `PostToolUse` hook) and
 `docs/design/acceptance-criteria.md` (how to split criteria into ones an agent can run and ones only
 a person can, so the second kind is still auditable).
 
+`AGENTS.md` is also a **three-layer rule book**: layer 1 (this file) is the safety boundary;
+layer 3 (`AGENTS.cases/<ID>.md`) holds the history behind one obligation; there is no index to
+read — the ID is the filename. `bin/check` refuses to go green on orphans either way, and passes
+when both sides are empty (not adopted, not broken). That is a different correspondence
+mechanism from `docs/validation/evidence/REQUIRED.json`. This scaffold seeds one pair
+(`AG-LAYER`) so a new repo is born with the shape, not only the checker.
+
 ## AGENTS.md is primary; CLAUDE.md is thin
 
 `AGENTS.md` holds all shared policy for every agent and human. `CLAUDE.md` imports it on **line 1**
@@ -51,6 +58,8 @@ status banner in a README is worse than none, because it is read with confidence
 - `python3 scripts/cleanup-scanner.py` — real secret-residue scan (exit 1 on finding)
 - `python3 tests/test_evidence_artifacts.py` — validate manual-verification records
 - `python3 tests/test_evidence_artifacts.py --self-test` — prove that validator can still fail
+- `bash bin/check --self-test` — prove the obligation↔case checker and the 32 KiB budget check can still fail
+- `bash bin/check` — Codex budget + obligation↔case correspondence (orphans red; both-empty green)
 - `python3 scripts/security-benchmark.py` — benchmark status (stubs report `NOT-IMPLEMENTED`)
 - `bash scripts/safe-exec.sh rm -rf foo` — destructive-command preview + confirm + log
 - `bash scripts/audit-tool-registry.sh` — tool-layer hole detection, exit 1 on finding (needs `yq`)
@@ -64,6 +73,7 @@ status banner in a README is worse than none, because it is read with confidence
 - `tools/registry.yaml` — example entries; delete the tools you do not call
 - `.semgrep/` — seed rules; retarget or delete for your languages
 - `docs/validation/evidence/REQUIRED.json` — one example phase; replace with your own
+- `AGENTS.cases/AG-LAYER.md` — one seed obligation/case pair; add a pair per new obligation, do not convert §1–13 headings into IDs
 - the dependency-audit and lint steps in CI (uncomment the matching language)
 - the `{{placeholders}}` in `AGENTS.md` / `SECURITY.md` / `CLAUDE.md` / `THREAT_MODEL.md` /
   `docs/handoff/CURRENT.md`, and the seeded rows in `docs/FILE-MAP.md`

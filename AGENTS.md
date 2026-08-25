@@ -30,6 +30,32 @@ The curated "what to read next" list above is a different job: it routes a reade
 that matter for a goal. `docs/FILE-MAP.md` lists everything and recommends nothing. Do not merge the
 two.
 
+<!-- obligation:AG-LAYER -->
+
+This file is the **safety boundary, not the whole background.** It holds obligations, applicability
+criteria, and the intuition most likely to mislead you. Events, dates, measurements, intent, and
+rejected options live in layer 3 (`AGENTS.cases/<ID>.md`). Reading only this file must still be
+safe, but **do not infer the boundary from the short text**; if you cannot tell what a sentence
+governs, say so instead of guessing from the wording.
+
+Each `<!-- obligation:<ID> -->` maps to `AGENTS.cases/<ID>.md`; the ID is the filename. **There is
+no index to read.** `bin/check` verifies the mapping is one-to-one in both directions, and measures
+this file against Codex's 32 KiB project-doc budget (overflow is silent truncation). Keep the angle
+brackets in examples like `<ID>` so the checker does not harvest them as real anchors.
+
+Open only that ID's case file when:
+
+1. The action sits on the literal boundary and you cannot tell whether it is in scope.
+2. You want to claim a rule does not apply.
+3. You are rewriting, moving, or deleting a rule — no exceptions.
+4. You are adding an obligation: the obligation stays in this file; add the anchor and the
+   same-named case in the same change.
+
+**A case must not add, relax, or tighten an obligation.** Numbered sections below are **structural
+headings, not obligation IDs.** Cross-project discipline lives in `~/.claude/ENGINEERING.md`. This
+correspondence is a different mechanism from `docs/validation/evidence/REQUIRED.json` (Group B
+artifacts).
+
 ---
 
 ## 1. What this repo is

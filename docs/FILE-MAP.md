@@ -29,13 +29,21 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 
 | Path | What it is for | Who reads it |
 |---|---|---|
-| `AGENTS.md` | The operating contract for every agent and human: read-first order, single-source-of-status, handoff protocol, evidence standard, decision records, never-commit list, tool-access classes, destructive-action protocol, and the rule against checks that cannot fail. Tool-agnostic. | Any agent or contributor, first |
+| `AGENTS.md` | The operating contract for every agent and human: three-layer preamble, read-first order, single-source-of-status, handoff protocol, evidence standard, decision records, never-commit list, tool-access classes, destructive-action protocol, and the rule against checks that cannot fail. Tool-agnostic. Numbered sections are structural headings, not obligation IDs. | Any agent or contributor, first |
 | `CLAUDE.md` | Claude Code-only mechanics on top of `AGENTS.md`, which it imports on line 1. Permissions, delegation boundary, conflict resolution. Holds no shared policy. | Claude Code sessions |
 | `README.md` | What this scaffold is, the 7-practice map from practice to file, and how to specialise it. States no project status by design. | Forkers, first-time readers |
 | `SECURITY.md` | Security ground rules an agent must not guess at: secrets, untrusted input, external actions, dependencies. Contains `{{placeholders}}` to fill per project. | Reviewers; anyone touching secrets or external systems |
 | `PRODUCT_SENSE.md` | The product red line that hidden destructive actions are a defect, plus the preview/confirm/log/abort protocol. Restates the protocol also given in `AGENTS.md` §10. | Any agent before a destructive command |
-| `.gitignore` | Declares what must never be committed. Note the git gotcha recorded in `AGENTS.md` §7: ignore `dir/*`, not `dir/`, or a negation cannot re-include a member. | Anyone adding a file type that might carry secrets |
+| `.gitignore` | Declares what must never be committed. `/bin/*` ignores build output in that directory; `!/bin/check` allow-lists the agent-policy checker (a negation cannot re-include a file whose *parent directory* is excluded — `AGENTS.md` §7). | Anyone adding a file type that might carry secrets |
 | `docs/FILE-MAP.md` | This file. The exhaustive manifest. | Anyone about to create a new file |
+| `bin/check` | Harness-independent checker: Codex 32 KiB budget (silent truncation, 85% warn band exits 3) and obligation↔case correspondence (orphans red both ways; both-empty = not adopted = green). `--self-test` plants synthetic trees and proves each clause can still fail. Template subset — does not check targets this scaffold does not ship. | CI; anyone adding or editing an obligation |
+
+## `AGENTS.cases/` — layer-3 cases (filename is the directory)
+
+| Path | What it is for | Who reads it |
+|---|---|---|
+| `AGENTS.cases/README.md` | Explains layer 3: no index, cases must not add obligations, angle-bracket trick so examples are not harvested as anchors. Carries no `case:` marker. | Anyone about to add or open a case |
+| `AGENTS.cases/AG-LAYER.md` | Seed case for `obligation:AG-LAYER`. Why layering is not slimming, why the filename is the index, how to add the next obligation, and that this mechanism is not the evidence-artifact checker. | Anyone in doubt about the three-layer split, or editing `AGENTS.md` / `bin/check` |
 
 ## `.claude/` — Claude Code harness
 
@@ -54,7 +62,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 
 | Path | What it is for | Who reads it |
 |---|---|---|
-| `.github/workflows/security-checks.yml` | The toolchain-independent check suite on every push, PR and daily: secret scan, semgrep, tool-registry audit, security benchmark, evidence-artifact validator and its self-test. Dependency-audit and lint steps are present but commented out, awaiting a language stack. | CI; anyone diagnosing a red build |
+| `.github/workflows/security-checks.yml` | The toolchain-independent check suite on every push, PR and daily: secret scan, semgrep, tool-registry audit, security benchmark, evidence-artifact validator and its self-test, then `bin/check` self-test-then-run. Dependency-audit and lint steps are present but commented out, awaiting a language stack. | CI; anyone diagnosing a red build |
 
 ## `.semgrep/` — promoted review rules
 
