@@ -44,6 +44,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 |---|---|---|
 | `AGENTS.cases/README.md` | Explains layer 3: no index, cases must not add obligations, angle-bracket trick so examples are not harvested as anchors. Carries no `case:` marker. | Anyone about to add or open a case |
 | `AGENTS.cases/AG-LAYER.md` | Seed case for `obligation:AG-LAYER`. Why layering is not slimming, why the filename is the index, how to add the next obligation, and that this mechanism is not the evidence-artifact checker. | Anyone in doubt about the three-layer split, or editing `AGENTS.md` / `bin/check` |
+| `AGENTS.cases/AG-GIT.md` | Case for `obligation:AG-GIT`. Why stay-put lives in `~/.claude/ENGINEERING.md` (See / verdict / edit), not as a second copy in this template; the 2026-08-24 five-repo incident. | Anyone about to edit another repo "while here", or rewriting the git pointer |
 
 ## `.claude/` — Claude Code harness
 

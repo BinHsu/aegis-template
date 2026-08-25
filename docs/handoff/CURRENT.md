@@ -3,7 +3,9 @@
 > **This file is the single source of truth for project status.** If any other document disagrees
 > with it, this one wins and the drift should be fixed. See `AGENTS.md` §3.
 
-**Last updated:** 2026-08-26 — issue #1 is in [PR #3](https://github.com/BinHsu/aegis-template/pull/3); PR CI `security-checks` run `32898894275` settled green (includes `bin/check --self-test` and `bin/check`).
+**Last updated:** 2026-08-26 — `#2` pointer landed on `issue-1-three-layer-skeleton` after
+`BinHsu/dotClaude#11` closed. [PR #3](https://github.com/BinHsu/aegis-template/pull/3) should close
+`#1` and `#2`.
 
 ---
 
@@ -19,12 +21,11 @@ file — fix it rather than guessing.
 
 ## 2. Last completed milestone
 
-Three-layer rule-book skeleton is on branch `issue-1-three-layer-skeleton`: layer-1 preamble +
-`<!-- obligation:AG-LAYER -->`, `AGENTS.cases/` with README + seed case, stripped `bin/check`
-(Codex budget + obligation↔case), CI self-test-then-run.
+`#1` three-layer skeleton plus `#2` stay-put **pointer** (not a second copy of the global rule).
 
 | Commit | Content |
 |---|---|
+| (this branch, unpushed until committed) | AG-GIT pointer + `AGENTS.cases/AG-GIT.md` |
 | `5940d67` | Add a three-layer rule-book skeleton and an orphan-refusing checker |
 | `b7b2ded` | Add a per-file index, Codex-runnable acceptance criteria, and fix checks that could not fail |
 
@@ -37,60 +38,61 @@ Three-layer rule-book skeleton is on branch `issue-1-three-layer-skeleton`: laye
 
 ## 4. Environment / system state
 
-- `#1` prerequisite `BinHsu/truewatch-ai-toolkit#2` is closed (completed 2026-08-24). `VERIFIED`.
-- `#2` remains **OPEN** and **blocked** on `BinHsu/dotClaude#11` (no settled wording). Do not
-  implement `#2` until that lands.
+- `#1` prerequisite `BinHsu/truewatch-ai-toolkit#2` closed 2026-08-24. `VERIFIED`.
+- `BinHsu/dotClaude#11` **CLOSED completed** 2026-08-25T21:03:12Z via PR #13, merge SHA
+  `cfe9fb7994a7cdd928e6650ac12f8b0247e80a56`. Settled form: See / verdict / edit in
+  `ENGINEERING.md` "Handoff is git and only git". Consumer repos get a **pointer**. `VERIFIED`
+  (`gh issue view 11 --repo BinHsu/dotClaude`).
+- `#2` implemented as that pointer + `<!-- obligation:AG-GIT -->` + matching case.
 
 ## 5. Commands already run
 
 ```
 bash bin/check --self-test
-# SELF-TEST passed — 38 assertions (B-1/B/B+1 on 85% band and 32 KiB cap; orphans red both ways)
+# SELF-TEST passed — 38 assertions
 
 bash bin/check
-# ✔ codex-budget — AGENTS.md is 13371 B, within 32768 B (40% used)
-# ✔ case-correspondence — 1 obligations, 1 case entries (AGENTS.cases/), both directions match
+# ✔ codex-budget — AGENTS.md is 13650 B, within 32768 B (41% used)
+# ✔ case-correspondence — 2 obligations, 2 case entries (AGENTS.cases/), both directions match
 # exit 0
 
 python3 tests/test_evidence_artifacts.py --self-test
 python3 tests/test_evidence_artifacts.py
 ```
 
-A first `bin/check` run went red because `AGENTS.cases/AG-LAYER.md` used `<!-- case:YOUR-ID -->`
-in a how-to; that was harvested as a real anchor. Fixed to `<!-- case:<ID> -->`.
-
 ## 6. Test results
 
 | Check | Result |
 |---|---|
 | `bin/check --self-test` | pass, 38 assertions |
-| `bin/check` | exit 0, 1:1 AG-LAYER pair, 13371 B / 40% |
+| `bin/check` | exit 0, AG-LAYER + AG-GIT 1:1, 13650 B / 41% |
 | evidence validator self-test + run | pass (0 artifacts, vacuous) |
 
-CI on PR #3 has been watched: `gh run watch 32898894275 --exit-status` → green, including
-Agent-policy checker self-test and Agent-policy checker.
+Earlier PR #3 CI (`32898894275`) was green for `#1` only. The `#2` commit needs its own PR CI watch
+after push.
 
 ## 7. Current blockers, in priority order
 
-1. `BinHsu/dotClaude#11` unsettleed → `aegis-template#2` must not be copied yet.
+None for `#1` / `#2` content. Merge of PR #3 is outward-facing (owner).
 
 ## 8. AWAITING DECISION — owner only
 
-None for `#1`.
+1. Merge [PR #3](https://github.com/BinHsu/aegis-template/pull/3)? After merge, watch the `main` CI
+   run — a merge is a different run from the PR's.
 
 ## 9. Exact next safe action
-
-Owner merge of [PR #3](https://github.com/BinHsu/aegis-template/pull/3) (`Closes #1`). After merge,
-watch the `main` run — a merge is a different CI run from the PR's.
 
 ```bash
 gh pr view 3 --json state,mergedAt,url
 ```
 
-Do **not** start `#2`. Stay on this repo.
+If this commit is not yet on the remote, push `issue-1-three-layer-skeleton` and watch the new
+`security-checks` run.
 
 ## 10. Things that will bite you
 
+- **Do not copy the ENGINEERING.md See / verdict / edit table into this template.** `#11` put the
+  body in one home. `#2` closes with a pointer. A second copy is the defect the issue named.
 - **Do not copy toolkit-only `bin/check` clauses** (`git-hookspath`, `pattern-index`,
   `sibling-homes`, `tg-safety-docs`, `conventions-reachability`). This template does not contain
   those targets; a check against absent code is a check that cannot fail (`AGENTS.md` §12).

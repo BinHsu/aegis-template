@@ -36,8 +36,8 @@ a person can, so the second kind is still auditable).
 layer 3 (`AGENTS.cases/<ID>.md`) holds the history behind one obligation; there is no index to
 read — the ID is the filename. `bin/check` refuses to go green on orphans either way, and passes
 when both sides are empty (not adopted, not broken). That is a different correspondence
-mechanism from `docs/validation/evidence/REQUIRED.json`. This scaffold seeds one pair
-(`AG-LAYER`) so a new repo is born with the shape, not only the checker.
+mechanism from `docs/validation/evidence/REQUIRED.json`. This scaffold seeds `AG-LAYER` (the
+split itself) and `AG-GIT` (a pointer to the global stay-put rule — not a second copy).
 
 ## AGENTS.md is primary; CLAUDE.md is thin
 
@@ -73,7 +73,7 @@ status banner in a README is worse than none, because it is read with confidence
 - `tools/registry.yaml` — example entries; delete the tools you do not call
 - `.semgrep/` — seed rules; retarget or delete for your languages
 - `docs/validation/evidence/REQUIRED.json` — one example phase; replace with your own
-- `AGENTS.cases/AG-LAYER.md` — one seed obligation/case pair; add a pair per new obligation, do not convert §1–13 headings into IDs
+- `AGENTS.cases/AG-LAYER.md` / `AG-GIT.md` — seed obligation/case pairs; add a pair per new obligation, do not convert §1–13 headings into IDs
 - the dependency-audit and lint steps in CI (uncomment the matching language)
 - the `{{placeholders}}` in `AGENTS.md` / `SECURITY.md` / `CLAUDE.md` / `THREAT_MODEL.md` /
   `docs/handoff/CURRENT.md`, and the seeded rows in `docs/FILE-MAP.md`

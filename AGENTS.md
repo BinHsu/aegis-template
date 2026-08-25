@@ -56,6 +56,14 @@ headings, not obligation IDs.** Cross-project discipline lives in `~/.claude/ENG
 correspondence is a different mechanism from `docs/validation/evidence/REQUIRED.json` (Group B
 artifacts).
 
+## git
+
+<!-- obligation:AG-GIT -->
+
+Crossing a branch or a repo: the home is `~/.claude/ENGINEERING.md`, section "Handoff is git and
+only git" (See / verdict / edit). Do not repeat it here — a piece of content has one home. The rest
+of this file still governs only this repo.
+
 ---
 
 ## 1. What this repo is
