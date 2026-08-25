@@ -25,7 +25,7 @@ file — fix it rather than guessing.
 
 | Commit | Content |
 |---|---|
-| (this branch, unpushed until committed) | AG-GIT pointer + `AGENTS.cases/AG-GIT.md` |
+| `07ffa53` | Pointer-only `AG-GIT` + `AGENTS.cases/AG-GIT.md` |
 | `5940d67` | Add a three-layer rule-book skeleton and an orphan-refusing checker |
 | `b7b2ded` | Add a per-file index, Codex-runnable acceptance criteria, and fix checks that could not fail |
 
