@@ -3,7 +3,7 @@
 > **This file is the single source of truth for project status.** If any other document disagrees
 > with it, this one wins and the drift should be fixed. See `AGENTS.md` §3.
 
-**Last updated:** 2026-08-26 — GitHub issue #1 transplanted locally; PR to `main` is the close.
+**Last updated:** 2026-08-26 — issue #1 is in [PR #3](https://github.com/BinHsu/aegis-template/pull/3); PR CI `security-checks` run `32898894275` settled green (includes `bin/check --self-test` and `bin/check`).
 
 ---
 
@@ -67,7 +67,8 @@ in a how-to; that was harvested as a real anchor. Fixed to `<!-- case:<ID> -->`.
 | `bin/check` | exit 0, 1:1 AG-LAYER pair, 13371 B / 40% |
 | evidence validator self-test + run | pass (0 artifacts, vacuous) |
 
-CI on the PR has not been watched yet. Watch it after push.
+CI on PR #3 has been watched: `gh run watch 32898894275 --exit-status` → green, including
+Agent-policy checker self-test and Agent-policy checker.
 
 ## 7. Current blockers, in priority order
 
@@ -79,12 +80,11 @@ None for `#1`.
 
 ## 9. Exact next safe action
 
-Push this branch and open the PR (outward-facing; `#1` close condition):
+Owner merge of [PR #3](https://github.com/BinHsu/aegis-template/pull/3) (`Closes #1`). After merge,
+watch the `main` run — a merge is a different CI run from the PR's.
 
 ```bash
-git push -u origin HEAD
-gh pr create --base main --title "Add three-layer rule-book skeleton and orphan-refusing checker" --body 'Closes #1'
-gh run watch --exit-status
+gh pr view 3 --json state,mergedAt,url
 ```
 
 Do **not** start `#2`. Stay on this repo.
