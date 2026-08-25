@@ -68,8 +68,8 @@ python3 tests/test_evidence_artifacts.py
 | `bin/check` | exit 0, AG-LAYER + AG-GIT 1:1, 13650 B / 41% |
 | evidence validator self-test + run | pass (0 artifacts, vacuous) |
 
-Earlier PR #3 CI (`32898894275`) was green for `#1` only. The `#2` commit needs its own PR CI watch
-after push.
+PR #3 CI after the AG-GIT push: `gh run watch 32899866792 --exit-status` → green, including
+Agent-policy checker self-test and Agent-policy checker.
 
 ## 7. Current blockers, in priority order
 
@@ -86,8 +86,8 @@ None for `#1` / `#2` content. Merge of PR #3 is outward-facing (owner).
 gh pr view 3 --json state,mergedAt,url
 ```
 
-If this commit is not yet on the remote, push `issue-1-three-layer-skeleton` and watch the new
-`security-checks` run.
+Owner merge of [PR #3](https://github.com/BinHsu/aegis-template/pull/3) (`Closes #1` and
+`Closes #2`). After merge, watch the `main` run — a merge is a different CI run from the PR's.
 
 ## 10. Things that will bite you
 
