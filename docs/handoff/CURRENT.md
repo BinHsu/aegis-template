@@ -2,13 +2,10 @@
 
 > **This file is the single source of truth for project status.** If any other document disagrees
 > with it, this one wins and the drift should be fixed. See `AGENTS.md` §3.
->
-> **Update this BEFORE starting a long or risky operation, not after.** State what you are about to
-> do, the exact command, and where the next worker resumes if you never come back. Commit it. Then
-> do the thing. Then update with the result. A post-hoc-only handoff is worthless precisely when it
-> is needed. See `AGENTS.md` §4.
 
-**Last updated:** {{DATE}} — {{who / which milestone}}
+**Last updated:** 2026-08-26 — `#2` pointer landed on `issue-1-three-layer-skeleton` after
+`BinHsu/dotClaude#11` closed. [PR #3](https://github.com/BinHsu/aegis-template/pull/3) should close
+`#1` and `#2`.
 
 ---
 
@@ -17,66 +14,93 @@
 1. `docs/handoff/CURRENT.md` (this file)
 2. `README.md`
 3. `AGENTS.md`
-4. `docs/ADR/INDEX.md`
+4. `SECURITY.md`
 
 You do **not** need any conversation history. If something here is unclear, that is a defect in this
 file — fix it rather than guessing.
 
 ## 2. Last completed milestone
 
-{{What is actually done. Not what was attempted.}}
+`#1` three-layer skeleton plus `#2` stay-put **pointer** (not a second copy of the global rule).
 
 | Commit | Content |
 |---|---|
-| {{sha}} | {{one line}} |
+| `07ffa53` | Pointer-only `AG-GIT` + `AGENTS.cases/AG-GIT.md` |
+| `5940d67` | Add a three-layer rule-book skeleton and an orphan-refusing checker |
+| `b7b2ded` | Add a per-file index, Codex-runnable acceptance criteria, and fix checks that could not fail |
 
 ## 3. Repository state
 
-- Branch: {{}}
-- Remote: {{}}
-- Visibility: {{public / private — note that private→public is one command, while the reverse does
-  not un-publish anything already fetched, forked or indexed}}
-- Hooks active: `git config core.hooksPath .githooks` → {{yes/no}}
+- Branch: `issue-1-three-layer-skeleton` (from `main` @ `b7b2ded`)
+- Remote: `https://github.com/BinHsu/aegis-template.git`
+- Visibility: public template repository
 - Local path is machine-specific and deliberately not recorded here.
 
 ## 4. Environment / system state
 
-{{Whatever a stranger must know before running anything: services up or down, toolchain installed or
-not, migrations applied, external resources provisioned and billing, hardware attached. Tag each with
-an evidence tag from `AGENTS.md` §5.}}
+- `#1` prerequisite `BinHsu/truewatch-ai-toolkit#2` closed 2026-08-24. `VERIFIED`.
+- `BinHsu/dotClaude#11` **CLOSED completed** 2026-08-25T21:03:12Z via PR #13, merge SHA
+  `cfe9fb7994a7cdd928e6650ac12f8b0247e80a56`. Settled form: See / verdict / edit in
+  `ENGINEERING.md` "Handoff is git and only git". Consumer repos get a **pointer**. `VERIFIED`
+  (`gh issue view 11 --repo BinHsu/dotClaude`).
+- `#2` implemented as that pointer + `<!-- obligation:AG-GIT -->` + matching case.
 
 ## 5. Commands already run
 
 ```
-{{exact commands, so nobody repeats a destructive one or re-derives a result}}
+bash bin/check --self-test
+# SELF-TEST passed — 38 assertions
+
+bash bin/check
+# ✔ codex-budget — AGENTS.md is 13650 B, within 32768 B (41% used)
+# ✔ case-correspondence — 2 obligations, 2 case entries (AGENTS.cases/), both directions match
+# exit 0
+
+python3 tests/test_evidence_artifacts.py --self-test
+python3 tests/test_evidence_artifacts.py
 ```
 
 ## 6. Test results
 
-{{What passed, what failed, what was never run. "Not run" is a valid and useful answer;
-"probably fine" is not.}}
+| Check | Result |
+|---|---|
+| `bin/check --self-test` | pass, 38 assertions |
+| `bin/check` | exit 0, AG-LAYER + AG-GIT 1:1, 13650 B / 41% |
+| evidence validator self-test + run | pass (0 artifacts, vacuous) |
+
+PR #3 CI after the AG-GIT push: `gh run watch 32899866792 --exit-status` → green, including
+Agent-policy checker self-test and Agent-policy checker.
 
 ## 7. Current blockers, in priority order
 
-1. {{}}
+None for `#1` / `#2` content. Merge of PR #3 is outward-facing (owner).
 
 ## 8. AWAITING DECISION — owner only
 
-Do not resolve these by inference. They are recorded, not forgotten.
-
-1. {{}}
+1. Merge [PR #3](https://github.com/BinHsu/aegis-template/pull/3)? After merge, watch the `main` CI
+   run — a merge is a different run from the PR's.
 
 ## 9. Exact next safe action
 
 ```bash
-{{a runnable command, not a description of one}}
+gh pr view 3 --json state,mergedAt,url
 ```
 
-{{If the next action is irreversible or outward-facing, say so here and say that it needs owner
-confirmation first.}}
+Owner merge of [PR #3](https://github.com/BinHsu/aegis-template/pull/3) (`Closes #1` and
+`Closes #2`). After merge, watch the `main` run — a merge is a different CI run from the PR's.
 
 ## 10. Things that will bite you
 
-{{Traps already discovered the hard way, each with a pointer to where it is documented in full.
-For anyone arriving cold this is the highest-value section in the file — the difference between
-losing an evening and not.}}
+- **Do not copy the ENGINEERING.md See / verdict / edit table into this template.** `#11` put the
+  body in one home. `#2` closes with a pointer. A second copy is the defect the issue named.
+- **Do not copy toolkit-only `bin/check` clauses** (`git-hookspath`, `pattern-index`,
+  `sibling-homes`, `tg-safety-docs`, `conventions-reachability`). This template does not contain
+  those targets; a check against absent code is a check that cannot fail (`AGENTS.md` §12).
+- **Do not wire `check_git_hookspath` into CI.** GitHub Actions checkouts do not set
+  `core.hooksPath`; that clause would be permanently red on every PR.
+- **Evidence correspondence ≠ rule↔case correspondence.**
+- **`<!-- obligation:<ID> -->` examples must keep the angle brackets.** Measured 2026-08-26:
+  `YOUR-ID` without brackets turned `bin/check` red on this branch.
+- **`/bin/` in `.gitignore` would have dropped `bin/check` with no error.** The parent-directory
+  exclude cannot be undone by a negation (`AGENTS.md` §7). Current pattern is `/bin/*` plus
+  `!/bin/check`. If `git status` does not show `bin/check`, that is why.

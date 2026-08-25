@@ -37,7 +37,8 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-/bin/
+/bin/*
+!/bin/check
 *.exe
 *.dll
 *.so

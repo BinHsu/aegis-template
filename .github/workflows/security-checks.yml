@@ -66,6 +66,17 @@ jobs:
       - name: Evidence artifacts well-formed
         run: python3 tests/test_evidence_artifacts.py
 
+      # ── Agent-policy checker: Codex budget + obligation↔case correspondence ──
+      # A different mechanism from the evidence validator above. Prove the checker
+      # can still fail, then run it. Without the self-test, a broken checker reports
+      # the same green as a clean repo. Exit 3 (85% budget warn band) fails this
+      # step on purpose — CI should notice the edge, not wait for silent truncation.
+      - name: Agent-policy checker self-test
+        run: bash bin/check --self-test
+
+      - name: Agent-policy checker
+        run: bash bin/check
+
       # Phase gates. Uncomment and name a phase once it is defined in REQUIRED.json.
       # - run: python3 tests/test_evidence_artifacts.py --require {{PHASE}}
 

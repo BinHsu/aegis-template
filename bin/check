@@ -1,0 +1,545 @@
+#!/usr/bin/env bash
+# bin/check — whether this repo's agent rules actually reach the next agent who opens it.
+#
+#   bin/check              run the checks
+#   bin/check --self-test  prove those checks can still fail (plant failure → red → restore → green)
+#
+# Template subset of the truewatch-ai-toolkit checker. Two clauses only:
+#   1. Codex 32 KiB project-doc budget (silent truncation)
+#   2. obligation ↔ case correspondence (orphans red both ways; both-empty = not adopted = green)
+#
+# Do not add checks that target files this scaffold does not ship (git-hookspath against a
+# CI checkout, pattern indexes, sibling-repo routing, Telegram CLI headers, conventions.md).
+# A check whose target is absent is a check that cannot fail — AGENTS.md §12.
+#
+# Why a script, not a rule: harnesses load AGENTS.md differently, and when they cannot they
+# say nothing. Codex silently truncates at 32 KiB. A harness-independent script is the only
+# way to observe that from outside. Pure bash + python3 (self-test file generation only).
+#
+# EXIT CODE is the contract
+#   0  every check ran; none red, none yellow
+#   1  at least one ✘ — someone has to act
+#   2  cannot run (python3 missing for --self-test)
+#   3  no ✘, but at least one ⚠ — not broken, already on the edge
+#
+# Why yellow has its own exit code, not exit 0 plus a yellow line: 32 KiB is binary —
+# 29 KiB is fine, 33 KiB silently drops 1 KB of rules. A yellow that does not change the
+# exit code is ignored by every automation (stdout vs /dev/null). Why not exit 1? That
+# merges "must act" with "should notice", and diluted reds get --no-verify'd. So 3 = not
+# broken, but something is approaching. Callers decide whether that is failure.
+# Pre-commit in this scaffold does not call bin/check; exit 3 is a signal, not a new gate.
+#
+# Every check must be able to fail. Each check is a function that takes a directory, so
+# --self-test can plant a tree that is guaranteed red and one that is guaranteed green.
+# A self-test that only checks one direction is as useless as a check that always returns 0.
+
+set -uo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# openai/codex project-doc budget, measured from upstream source (2026-08-22, main):
+#   codex-rs/config/src/config_toml.rs:73
+#     pub const DEFAULT_PROJECT_DOC_MAX_BYTES: usize = 32 * 1024;
+#   codex-rs/core/src/agents_md.rs:169
+#     if size > remaining { data.truncate(remaining as usize); }
+# Truncation is silent: tracing::warn! only, not visible to the model or the transcript.
+# Codex does not expand @-imports (Claude Code syntax). Budget counts AGENTS.md itself.
+CODEX_BUDGET=$((32 * 1024))
+CODEX_WARN_PCT=85
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+
+FAIL=0
+WARN=0
+CHECKS=0
+
+verdict_code() { # verdict_code <fail> <warn>
+  [[ "$1" -gt 0 ]] && { echo 1; return; }
+  [[ "$2" -gt 0 ]] && { echo 3; return; }
+  echo 0
+}
+
+bytes_of() { [[ -f "$1" ]] && wc -c < "$1" | tr -d ' ' || echo 0; }
+
+# Codex candidate filenames: AGENTS.override.md first, then AGENTS.md.
+codex_doc_in() {
+  local d="$1"
+  [[ -f "$d/AGENTS.override.md" ]] && { echo "$d/AGENTS.override.md"; return; }
+  [[ -f "$d/AGENTS.md" ]] && { echo "$d/AGENTS.md"; return; }
+  echo ""
+}
+
+# Leading-line @relative/path imports only. Mid-sentence @mentions are prose.
+codex_import_targets() { # codex_import_targets <doc>
+  local doc="$1" dir rel
+  dir="$(cd "$(dirname "$doc")" && pwd)"
+  /usr/bin/grep -oE '^[[:space:]]*@[^[:space:]]+' "$doc" 2>/dev/null \
+    | sed -E 's/^[[:space:]]*@//' \
+    | while IFS= read -r rel; do
+        [[ -n "$rel" && -f "$dir/$rel" ]] && echo "$rel"
+      done
+  return 0
+}
+
+codex_import_note() { # codex_import_note <doc> <indent>
+  local doc="$1" ind="$2" rel b total=0 list=""
+  while IFS= read -r rel; do
+    [[ -z "$rel" ]] && continue
+    b="$(bytes_of "$(cd "$(dirname "$doc")" && pwd)/$rel")"
+    total=$((total + b)); list="${list}${list:+, }${rel} (${b} B)"
+  done < <(codex_import_targets "$doc")
+  [[ "$total" -eq 0 ]] && return 0
+  echo "${ind}· @-import: ${list}"
+  echo "${ind}  🔴 **Codex does not expand @; those ${total} B do not exist for Codex**, and there is no warning."
+  echo "${ind}     They do not count toward the 32 KiB budget (the percentage above excludes them), and they never reach the model."
+  echo "${ind}     Evidence: codex-rs/core/src/agents_md.rs:162→169→180 — no @ parsing on that path."
+  echo "${ind}     Fix: anything Codex must see, move into the AGENTS.md body (that does consume budget)."
+  return 0
+}
+
+check_codex_budget() {
+  local dir="$1" doc n over pct
+  doc="$(codex_doc_in "$dir")"
+
+  if [[ -z "$doc" ]]; then
+    echo "  ✘ codex-budget — $dir has no AGENTS.md / AGENTS.override.md"
+    echo "      Codex will read no project rules. This is not 'nothing to check'; it is the worst case."
+    return 1
+  fi
+
+  n="$(bytes_of "$doc")"
+  local g gdoc
+  gdoc="$(codex_doc_in "$CODEX_HOME")"
+  g="$(bytes_of "$gdoc")"
+
+  pct=$((n * 100 / CODEX_BUDGET))
+
+  if [[ "$n" -le "$CODEX_BUDGET" ]] && [[ "$pct" -lt "$CODEX_WARN_PCT" ]]; then
+    echo "  ✔ codex-budget — ${doc#"$dir"/} is ${n} B, within ${CODEX_BUDGET} B (${pct}% used)"
+    codex_import_note "$doc" "      "
+    [[ -n "$gdoc" ]] && echo "      · global $gdoc is ${g} B — upstream main does not cap it; it is not this budget"
+    return 0
+  fi
+
+  if [[ "$n" -le "$CODEX_BUDGET" ]]; then
+    echo "  ⚠ codex-budget — ${doc#"$dir"/} is ${n} B, ${pct}% used (≥ ${CODEX_WARN_PCT}% warn band, still under ${CODEX_BUDGET} B)"
+    echo "      No byte has been dropped yet — $((CODEX_BUDGET - n)) B remain. The moment it overflows is silent,"
+    echo "      so this band exists so 'not red yet' and 'red tomorrow' do not look the same."
+    echo "      Fix: move the least-used paragraphs into on-demand case files now, cheaper than after overflow."
+    codex_import_note "$doc" "      "
+    [[ -n "$gdoc" ]] && echo "      · global $gdoc is ${g} B — upstream main does not cap it; it is not this budget"
+    return 3
+  fi
+
+  over=$((n - CODEX_BUDGET))
+  echo "  ✘ codex-budget — ${doc#"$dir"/} is ${n} B, ${pct}% over the ${CODEX_BUDGET} B cap"
+  echo "      Codex stops after the first ${CODEX_BUDGET} B; **the last ${over} B are silently discarded**."
+  echo "      No error, no prompt: the rules at the end of the file do not exist for Codex."
+  echo "      Evidence: codex-rs/core/src/agents_md.rs:169  data.truncate(remaining as usize)"
+  echo "      Fix: cut AGENTS.md to under ${CODEX_BUDGET} B (rest goes in AGENTS.cases/, read on doubt),"
+  echo "            or set project_doc_max_bytes in ~/.codex/config.toml (saves this machine only)."
+  codex_import_note "$doc" "      "
+  [[ -n "$gdoc" ]] && echo "      · global $gdoc is ${g} B — upstream main does not cap it; it is not this budget"
+  return 1
+}
+
+# ── obligation ↔ case correspondence ─────────────────────────────
+# Layer 1  AGENTS.md              — obligations + criteria; one <!-- obligation:ID --> per rule
+# Layer 3  AGENTS.cases/<ID>.md   — events, dates, measurements, rejected options; <!-- case:ID -->
+# The ID is the filename, so there is no index to read.
+#
+# Red on: (a) orphans both ways, (b) duplicate obligation IDs, (c) case anchor in a file
+# not named <ID>.md (directory layout only). Content quality is not judged.
+# Both sides empty = green: the split is not adopted yet, not broken.
+#
+# Layout priority (first match wins):
+#   1. CASE_FILE env (override; self-test uses this)
+#   2. directory AGENTS.cases/*.md   ← this scaffold's layout
+#   3. single file AGENTS.cases.md   ← legacy, so an upgrade is not an instant red
+
+CASE_FILE_DEFAULT="AGENTS.cases.md"
+CASE_DIR_DEFAULT="AGENTS.cases"
+
+case_layout_in() { # case_layout_in <dir>
+  local d="$1"
+  if [[ -n "${CASE_FILE:-}" ]]; then
+    [[ -f "$d/$CASE_FILE" ]] && { echo file; return; }
+    echo none; return
+  fi
+  [[ -d "$d/${CASE_DIR:-$CASE_DIR_DEFAULT}" ]] && { echo dir; return; }
+  [[ -f "$d/$CASE_FILE_DEFAULT" ]] && { echo file; return; }
+  echo none
+}
+
+case_sources_in() { # case_sources_in <dir>
+  local d="$1"
+  case "$(case_layout_in "$d")" in
+    file) echo "$d/${CASE_FILE:-$CASE_FILE_DEFAULT}" ;;
+    dir)  find "$d/${CASE_DIR:-$CASE_DIR_DEFAULT}" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort ;;
+    *)    : ;;
+  esac
+  return 0
+}
+
+case_source_label() { # case_source_label <dir>
+  local d="$1"
+  case "$(case_layout_in "$d")" in
+    file) echo "${CASE_FILE:-$CASE_FILE_DEFAULT}" ;;
+    dir)  echo "${CASE_DIR:-$CASE_DIR_DEFAULT}/" ;;
+    *)    echo "${CASE_FILE:-$CASE_DIR_DEFAULT}/ or $CASE_FILE_DEFAULT" ;;
+  esac
+}
+
+sorted_nonblank() { echo "$1" | sed '/^$/d' | sort -u; }
+
+# First character of an ID must be [A-Za-z0-9], so prose examples <!-- obligation:<ID> -->
+# are not harvested (`<` is not alphanumeric).
+obligation_ids_in() { # obligation_ids_in <doc>
+  local doc="$1"
+  [[ -f "$doc" ]] || return 0
+  /usr/bin/grep -oE '<!--[[:space:]]*obligation:[[:space:]]*[A-Za-z0-9][A-Za-z0-9._-]*[[:space:]]*-->' "$doc" 2>/dev/null \
+    | sed -E 's/.*obligation:[[:space:]]*([A-Za-z0-9._-]+)[[:space:]]*-->.*/\1/'
+}
+
+case_ids_in() { # case_ids_in <file>
+  local f="$1"
+  [[ -f "$f" ]] || return 0
+  /usr/bin/grep -oE '<!--[[:space:]]*case:[[:space:]]*[A-Za-z0-9][A-Za-z0-9._-]*[[:space:]]*-->' "$f" 2>/dev/null \
+    | sed -E 's/.*case:[[:space:]]*([A-Za-z0-9._-]+)[[:space:]]*-->.*/\1/'
+}
+
+case_root_of() { echo "$1" | sed -E 's/\.[0-9]+$//'; }
+
+case_filename_violations() { # case_filename_violations <dir>
+  local d="$1" f base id want
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    base="$(basename "$f")"
+    while IFS= read -r id; do
+      [[ -n "$id" ]] || continue
+      want="$(case_root_of "$id").md"
+      [[ "$base" == "$want" ]] || echo "${base} contains case:${id}; it belongs in ${want}"
+    done < <(case_ids_in "$f")
+  done < <(case_sources_in "$d")
+  return 0
+}
+
+check_case_correspondence() {
+  local dir="$1" doc obligations sources case_ids case_roots layout label doc_rel
+  doc="$(codex_doc_in "$dir")"
+  obligations=""
+  [[ -n "$doc" ]] && obligations="$(obligation_ids_in "$doc")"
+  layout="$(case_layout_in "$dir")"
+  label="$(case_source_label "$dir")"
+  sources="$(case_sources_in "$dir")"
+  case_ids=""
+  if [[ -n "$sources" ]]; then
+    case_ids="$(while IFS= read -r f; do [[ -n "$f" ]] && case_ids_in "$f"; done <<< "$sources")"
+  fi
+
+  if [[ -z "$(sorted_nonblank "$obligations")" && -z "$(sorted_nonblank "$case_ids")" ]]; then
+    echo "  ✔ case-correspondence — AGENTS.md has no <!-- obligation:ID -->, cases have no <!-- case:ID -->: split not adopted yet, this is not broken"
+    return 0
+  fi
+
+  local dup_obl
+  dup_obl="$(echo "$obligations" | sed '/^$/d' | sort | uniq -d)"
+  if [[ -n "$dup_obl" ]]; then
+    echo "  ✘ case-correspondence — these obligation IDs appear more than once in AGENTS.md; they cannot map uniquely to a case:"
+    echo "$dup_obl" | while IFS= read -r id; do echo "      · $id"; done
+    return 1
+  fi
+
+  if [[ -z "$sources" ]]; then
+    echo "  ✘ case-correspondence — AGENTS.md has $(sorted_nonblank "$obligations" | wc -l | tr -d ' ') obligation IDs, but no case source (expected ${label})"
+    echo "      Every obligation is currently an orphan. Fix: add AGENTS.cases/<ID>.md, or point CASE_FILE at a single file."
+    return 1
+  fi
+
+  case_roots="$(sorted_nonblank "$case_ids" | while IFS= read -r id; do case_root_of "$id"; done)"
+
+  local missing_case missing_obl badname=""
+  missing_case="$(comm -23 <(sorted_nonblank "$obligations") <(sorted_nonblank "$case_roots"))"
+  missing_obl="$(comm -13 <(sorted_nonblank "$obligations") <(sorted_nonblank "$case_roots"))"
+  [[ "$layout" == "dir" ]] && badname="$(case_filename_violations "$dir")"
+
+  if [[ -z "$missing_case" && -z "$missing_obl" && -z "$badname" ]]; then
+    echo "  ✔ case-correspondence — $(sorted_nonblank "$obligations" | wc -l | tr -d ' ') obligations, $(sorted_nonblank "$case_ids" | wc -l | tr -d ' ') case entries (${label}), both directions match"
+    [[ "$layout" == "dir" ]] && echo "      · every case anchor lives in <ID>.md — from a rule you can open that one file, no index"
+    return 0
+  fi
+
+  doc_rel="(no AGENTS.md / AGENTS.override.md)"
+  [[ -n "$doc" ]] && doc_rel="${doc#"$dir"/}"
+  echo "  ✘ case-correspondence — ${doc_rel} and ${label} do not match:"
+  if [[ -n "$missing_case" ]]; then
+    echo "      obligation present, case does not mention:"
+    echo "$missing_case" | while IFS= read -r id; do echo "        · $id"; done
+  fi
+  if [[ -n "$missing_obl" ]]; then
+    echo "      case entry points at an obligation ID that AGENTS.md does not have:"
+    echo "$missing_obl" | while IFS= read -r id; do echo "        · $id"; done
+  fi
+  if [[ -n "$badname" ]]; then
+    echo "      filename does not match ID (the 'ID is the filename' guarantee would fail):"
+    echo "$badname" | while IFS= read -r line; do echo "        · $line"; done
+  fi
+  echo "      Fix: add the missing side or rename the file; if you deleted an obligation, delete its case in the same change."
+  return 1
+}
+
+run_all() {
+  local dir="$1"
+  echo "── whether this repo's rules reach the next agent ──"
+  echo "   $dir"
+  echo
+  tally check_codex_budget         "$dir"
+  tally check_case_correspondence  "$dir"
+}
+
+tally() {
+  local rc
+  "$@"; rc=$?
+  CHECKS=$((CHECKS + 1))
+  case "$rc" in
+    0) ;;
+    3) WARN=$((WARN + 1)) ;;
+    *) FAIL=$((FAIL + 1)) ;;
+  esac
+}
+
+ST_FAIL=0
+ST_RUN=0
+
+expect() { # expect <want:red|green|warn> <label> <cmd...>
+  local want="$1" label="$2"; shift 2
+  ST_RUN=$((ST_RUN + 1))
+  local out rc
+  out="$("$@" 2>&1)"; rc=$?
+  if [[ "$want" == "red" && $rc -eq 1 ]] || [[ "$want" == "green" && $rc -eq 0 ]] \
+     || [[ "$want" == "warn" && $rc -eq 3 ]]; then
+    echo "  ✔ $label — expected ${want}, got exit $rc"
+    return 0
+  fi
+  echo "  ✘ $label — expected ${want}, got exit $rc"
+  printf '      %s\n' "$out"
+  ST_FAIL=$((ST_FAIL + 1))
+  return 1
+}
+
+expect_out() { # expect_out <has|hasnt> <needle> <label> <cmd...>
+  local want="$1" needle="$2" label="$3"; shift 3
+  ST_RUN=$((ST_RUN + 1))
+  local out; out="$("$@" 2>&1)"
+  if [[ "$want" == "has" && "$out" == *"$needle"* ]] \
+     || [[ "$want" == "hasnt" && "$out" != *"$needle"* ]]; then
+    echo "  ✔ $label — output ${want} 「${needle}」"
+    return 0
+  fi
+  echo "  ✘ $label — expected output ${want} 「${needle}」, actual:"
+  printf '      %s\n' "$out"
+  ST_FAIL=$((ST_FAIL + 1))
+  return 1
+}
+
+expect_eq() { # expect_eq <want> <label> <cmd...>
+  local want="$1" label="$2"; shift 2
+  ST_RUN=$((ST_RUN + 1))
+  local got; got="$("$@" 2>&1)"
+  if [[ "$got" == "$want" ]]; then
+    echo "  ✔ $label — got ${got}"
+    return 0
+  fi
+  echo "  ✘ $label — expected ${want}, got ${got}"
+  ST_FAIL=$((ST_FAIL + 1))
+  return 1
+}
+
+self_test() {
+  command -v python3 >/dev/null 2>&1 || { echo "python3 not on PATH; --self-test cannot plant files" >&2; exit 2; }
+  ST_TMP="$(mktemp -d)" || { echo "mktemp failed" >&2; exit 2; }
+  trap 'rm -rf "${ST_TMP}"' EXIT
+
+  echo "── self-test: each check, plant failure → red → restore → green ──"
+  echo "   temp tree: ${ST_TMP} (rm -rf on exit; no real files touched)"
+  echo
+
+  echo "1. codex-budget"
+  mkdir -p "${ST_TMP}/budget-red" "${ST_TMP}/budget-green" "${ST_TMP}/budget-none"
+  python3 -c "import sys;open(sys.argv[1],'w').write('x'*(40*1024))" "${ST_TMP}/budget-red/AGENTS.md"
+  expect red   "  over budget → red"        check_codex_budget "${ST_TMP}/budget-red"
+  python3 -c "import sys;open(sys.argv[1],'w').write('x'*1024)" "${ST_TMP}/budget-green/AGENTS.md"
+  expect green "  within budget → green"    check_codex_budget "${ST_TMP}/budget-green"
+  expect red   "  no AGENTS.md at all → red (not auto-pass)" check_codex_budget "${ST_TMP}/budget-none"
+
+  echo
+  echo "1b. codex-budget 85% warn band (B-1 / B / cap / cap+1)"
+  # pct = n*100/32768 ≥ 85 → n ≥ 27852.8 → 27853 is the first yellow byte count.
+  # Testing only 'obviously low' and 'obviously high' would let >= written as > still pass.
+  for pair in "27852:green:84% → green (cell below the warn band)" \
+              "27853:warn:85% → yellow (first cell of the warn band)" \
+              "32768:warn:exactly the cap → yellow (no byte dropped, no headroom)" \
+              "32769:red:one byte over the cap → red"; do
+    b="${pair%%:*}"; rest="${pair#*:}"; want="${rest%%:*}"; lab="${rest#*:}"
+    mkdir -p "${ST_TMP}/band-${b}"
+    python3 -c "import sys;open(sys.argv[1],'w').write('x'*int(sys.argv[2]))" \
+      "${ST_TMP}/band-${b}/AGENTS.md" "$b"
+    expect "$want" "  ${b} B — ${lab}" check_codex_budget "${ST_TMP}/band-${b}"
+  done
+
+  echo
+  echo "1c. @-import: Codex does not expand, so those bytes must be named"
+  mkdir -p "${ST_TMP}/imp-yes" "${ST_TMP}/imp-no" "${ST_TMP}/imp-dangling"
+  printf '# rules\n\n@sub.md\n' > "${ST_TMP}/imp-yes/AGENTS.md"
+  python3 -c "import sys;open(sys.argv[1],'w').write('y'*4096)" "${ST_TMP}/imp-yes/sub.md"
+  expect_out has   "4096 B"  "  imported file exists → name its byte count" \
+    check_codex_budget "${ST_TMP}/imp-yes"
+  expect_out has   "does not expand"  "  imported file exists → say Codex does not expand" \
+    check_codex_budget "${ST_TMP}/imp-yes"
+  expect green "  import does not count toward budget → still green" check_codex_budget "${ST_TMP}/imp-yes"
+  printf '# rules\n\nmentioning @somebody is just prose\n' > "${ST_TMP}/imp-no/AGENTS.md"
+  expect_out hasnt "@-import" "  no leading-line @ → do not invent an import" \
+    check_codex_budget "${ST_TMP}/imp-no"
+  printf '# rules\n\n@missing.md\n' > "${ST_TMP}/imp-dangling/AGENTS.md"
+  expect_out hasnt "@-import" "  @ pointing at a missing file → prose, do not report" \
+    check_codex_budget "${ST_TMP}/imp-dangling"
+
+  echo
+  echo "1d. verdict table: red > yellow > green"
+  expect_eq 1 "  any red → 1"                    verdict_code 1 0
+  expect_eq 3 "  yellow only → 3"                verdict_code 0 1
+  expect_eq 0 "  neither → 0"                    verdict_code 0 0
+  expect_eq 1 "  red and yellow together → 1 (red wins)" verdict_code 1 1
+
+  echo
+  echo "2. case-correspondence"
+  local c="${ST_TMP}/case"
+  mkdir -p "$c"
+  expect green "  no AGENTS.md and no case file → green (not adopted)" check_case_correspondence "$c"
+  mkdir -p "$c/none"
+  printf '# rules\n\nno anchors at all.\n' > "$c/none/AGENTS.md"
+  expect green "  AGENTS.md present but no obligation anchors → green (not adopted)" check_case_correspondence "$c/none"
+
+  mkdir -p "$c/orphan-obligation"
+  printf '# rules\n\n<!-- obligation:AG-1 -->\nthis id has no case file.\n' > "$c/orphan-obligation/AGENTS.md"
+  expect red "  obligation has an id, no case source at all → red" check_case_correspondence "$c/orphan-obligation"
+  expect_out has "no case source" "  message must say the source is missing, not that an entry is missing" \
+    check_case_correspondence "$c/orphan-obligation"
+
+  mkdir -p "$c/orphan-case"
+  printf '# rules\n\nno obligation anchors.\n' > "$c/orphan-case/AGENTS.md"
+  printf '## cases\n\n<!-- case:AG-9 -->\nthis case points at a missing obligation.\n' > "$c/orphan-case/AGENTS.cases.md"
+  expect red "  case file has an entry, AGENTS.md has no matching obligation → red" check_case_correspondence "$c/orphan-case"
+  expect_out has "AG-9" "  red must name the dangling id" check_case_correspondence "$c/orphan-case"
+
+  mkdir -p "$c/direct-match"
+  printf '# rules\n\n<!-- obligation:AG-1 -->\none obligation.\n' > "$c/direct-match/AGENTS.md"
+  printf '## cases\n\n<!-- case:AG-1 -->\none case, same id (no sub-number).\n' > "$c/direct-match/AGENTS.cases.md"
+  expect green "  one obligation to one same-named case → green" check_case_correspondence "$c/direct-match"
+
+  mkdir -p "$c/sub-numbered"
+  printf '# rules\n\n<!-- obligation:AG-2 -->\none obligation, two cases under it.\n' > "$c/sub-numbered/AGENTS.md"
+  printf '## cases\n\n<!-- case:AG-2.1 -->\nfirst.\n\n<!-- case:AG-2.2 -->\nsecond.\n' \
+    > "$c/sub-numbered/AGENTS.cases.md"
+  expect green "  sub-numbers AG-2.1 / AG-2.2 both roll up to AG-2 → green" check_case_correspondence "$c/sub-numbered"
+
+  mkdir -p "$c/non-numeric-suffix"
+  printf '# rules\n\n<!-- obligation:AG-3 -->\none obligation.\n' > "$c/non-numeric-suffix/AGENTS.md"
+  printf '## cases\n\n<!-- case:AG-3.a -->\nsuffix is not digits; not a sub-number.\n' \
+    > "$c/non-numeric-suffix/AGENTS.cases.md"
+  expect red "  non-numeric suffix (AG-3.a) → red; do not force a match" \
+    check_case_correspondence "$c/non-numeric-suffix"
+
+  mkdir -p "$c/dup-obligation"
+  printf '# rules\n\n<!-- obligation:AG-4 -->\nfirst.\n\n<!-- obligation:AG-4 -->\nagain.\n' \
+    > "$c/dup-obligation/AGENTS.md"
+  printf '## cases\n\n<!-- case:AG-4 -->\none case.\n' > "$c/dup-obligation/AGENTS.cases.md"
+  expect red "  same obligation id twice → red (cannot map uniquely)" check_case_correspondence "$c/dup-obligation"
+
+  mkdir -p "$c/custom-name"
+  printf '# rules\n\n<!-- obligation:AG-5 -->\none obligation.\n' > "$c/custom-name/AGENTS.md"
+  printf '## cases\n\n<!-- case:AG-5 -->\nin a custom filename.\n' > "$c/custom-name/CASES-custom.md"
+  expect red "  case file not at the default name → red (do not guess a second name)" check_case_correspondence "$c/custom-name"
+  CASE_FILE="CASES-custom.md" expect green "  CASE_FILE points at the real path → green" \
+    check_case_correspondence "$c/custom-name"
+
+  echo
+  echo "2b. case-correspondence directory layout AGENTS.cases/<ID>.md"
+  mkdir -p "$c/dir-ok/AGENTS.cases"
+  printf '# rules\n\n<!-- obligation:AG-A -->\nA.\n\n<!-- obligation:AG-B -->\nB.\n' \
+    > "$c/dir-ok/AGENTS.md"
+  printf '<!-- case:AG-A -->\ncase A.\n' > "$c/dir-ok/AGENTS.cases/AG-A.md"
+  printf '<!-- case:AG-B -->\ncase B.\n' > "$c/dir-ok/AGENTS.cases/AG-B.md"
+  expect green "  two obligations each in their own <ID>.md → green" check_case_correspondence "$c/dir-ok"
+  expect_out has "AGENTS.cases/" "  green must say the directory layout is in use" \
+    check_case_correspondence "$c/dir-ok"
+  printf '# this layer explained; not a case\n' > "$c/dir-ok/AGENTS.cases/README.md"
+  expect green "  directory contains an unanchored README → still green" check_case_correspondence "$c/dir-ok"
+
+  mkdir -p "$c/dir-badname/AGENTS.cases"
+  printf '# rules\n\n<!-- obligation:AG-A -->\nA.\n' > "$c/dir-badname/AGENTS.md"
+  printf '<!-- case:AG-A -->\nwrong filename.\n' > "$c/dir-badname/AGENTS.cases/somewhere-else.md"
+  expect red "  case:AG-A living in somewhere-else.md → red (filename is the location)" \
+    check_case_correspondence "$c/dir-badname"
+  expect_out has "AG-A.md" "  red must name the file it should live in" \
+    check_case_correspondence "$c/dir-badname"
+
+  mkdir -p "$c/dir-sub/AGENTS.cases"
+  printf '# rules\n\n<!-- obligation:AG-A -->\nA.\n' > "$c/dir-sub/AGENTS.md"
+  printf '<!-- case:AG-A.1 -->\nfirst.\n\n<!-- case:AG-A.2 -->\nsecond.\n' \
+    > "$c/dir-sub/AGENTS.cases/AG-A.md"
+  expect green "  AG-A.1 / AG-A.2 both live in AG-A.md → green" check_case_correspondence "$c/dir-sub"
+
+  mkdir -p "$c/dir-orphan-obl/AGENTS.cases"
+  printf '# rules\n\n<!-- obligation:AG-A -->\nA.\n\n<!-- obligation:AG-B -->\nB has no case.\n' \
+    > "$c/dir-orphan-obl/AGENTS.md"
+  printf '<!-- case:AG-A -->\nonly A.\n' > "$c/dir-orphan-obl/AGENTS.cases/AG-A.md"
+  expect red "  directory layout: one extra obligation, no case → red" check_case_correspondence "$c/dir-orphan-obl"
+  mkdir -p "$c/dir-orphan-case/AGENTS.cases"
+  printf '# rules\n\n<!-- obligation:AG-A -->\nA.\n' > "$c/dir-orphan-case/AGENTS.md"
+  printf '<!-- case:AG-A -->\nA.\n' > "$c/dir-orphan-case/AGENTS.cases/AG-A.md"
+  printf '<!-- case:AG-Z -->\npoints at a missing obligation.\n' > "$c/dir-orphan-case/AGENTS.cases/AG-Z.md"
+  expect red "  directory layout: case points at a missing obligation → red" check_case_correspondence "$c/dir-orphan-case"
+
+  mkdir -p "$c/dir-and-file/AGENTS.cases"
+  printf '# rules\n\n<!-- obligation:AG-A -->\nA.\n' > "$c/dir-and-file/AGENTS.md"
+  printf '<!-- case:AG-A -->\ndirectory copy.\n' > "$c/dir-and-file/AGENTS.cases/AG-A.md"
+  printf '<!-- case:AG-Z -->\nsingle-file copy, points at a missing obligation.\n' > "$c/dir-and-file/CASES-x.md"
+  expect green "  no CASE_FILE → use directory layout (green)" check_case_correspondence "$c/dir-and-file"
+  CASE_FILE="CASES-x.md" expect red "  CASE_FILE set → overrides directory, reads the file (red)" \
+    check_case_correspondence "$c/dir-and-file"
+
+  echo
+  if [[ $ST_FAIL -gt 0 ]]; then
+    echo "  ✘ SELF-TEST failed — $ST_RUN assertions, $ST_FAIL not as expected"
+    echo "    A check does not go red or green the way it claims. Fix it; do not trust its result. exit 1"
+    exit 1
+  fi
+  echo "  ✔ SELF-TEST passed — $ST_RUN assertions all as expected (red goes red, green goes green)"
+  echo "    This proves the checks move, not that the repo is clean. Run bin/check for the latter. exit 0"
+  exit 0
+}
+
+case "${1:-}" in
+  --self-test) self_test ;;
+  "") ;;
+  *) echo "usage: bin/check [--self-test]" >&2; exit 2 ;;
+esac
+
+run_all "$REPO"
+
+echo
+echo "── verdict ──"
+RC="$(verdict_code "$FAIL" "$WARN")"
+if [[ "$RC" -eq 1 ]]; then
+  echo "  ✘ act — ran $CHECKS checks, $FAIL red, $WARN yellow"
+  echo "    every ✘ points at a real problem. exit 1"
+  exit 1
+fi
+if [[ "$RC" -eq 3 ]]; then
+  echo "  ⚠ not broken, but $WARN check(s) on the edge — ran $CHECKS, none red"
+  echo "    exit 3 (not 0: a yellow that does not change the exit code is no warning;"
+  echo "    not 1: no rule has been dropped yet. The caller decides whether this is failure.)"
+  exit 3
+fi
+echo "  ✔ OK — ran $CHECKS checks, none red, none yellow. exit 0"
+exit 0
