@@ -213,7 +213,12 @@ def run(evidence_dir: Path, cfg: dict, require_phase: str | None) -> tuple[int, 
 
     scope = f"phase {require_phase} gate" if require_phase is not None else "well-formedness"
     if not present and require_phase is None:
-        return 0, ("evidence artifacts: 0 present, nothing to check "
+        # The marker is what makes this countable. This branch already called itself a
+        # vacuous pass, and it still exited 0, so CI went green on a repo where nothing
+        # had been verified. bin/test counts `## SKIP` lines on stdout and its --strict
+        # mode turns them red; the sentence below stays for a human reading one run.
+        return 0, ("## SKIP test_evidence_artifacts/well-formedness — 0 artifacts present\n"
+                   "evidence artifacts: 0 present, nothing to check "
                    "(vacuous pass — use --require <phase> to gate)")
     return 0, f"evidence artifacts: {len(present)} checked, {scope} satisfied"
 

@@ -37,6 +37,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 | `.gitignore` | Declares what must never be committed. **Default-deny at the top**: `.*` blocks every dot-path, then a small allowlist (`!.gitignore`, `!.claude/`, `!.githooks/`, `!.github/`, `!.semgrep/`) re-admits the tracked scaffold directories — closes the 14/18-credential-dotfile gap a pure blocklist left open (issue #5). The block's own comments carry the two silent traps: position (`.*` must stay first, last-match-wins) and directory-not-file negation. `/bin/*` ignores build output in that directory; `!/bin/check` allow-lists the agent-policy checker (a negation cannot re-include a file whose *parent directory* is excluded — `AGENTS.md` §7). Adding a new tracked dotfile or dot-directory needs its own `!` line in the same commit. | Anyone adding a file type or dotfile that might carry secrets |
 | `docs/FILE-MAP.md` | This file. The exhaustive manifest. | Anyone about to create a new file |
 | `bin/check` | Harness-independent checker: Codex 32 KiB budget (silent truncation, 85% warn band exits 3) and obligation↔case correspondence (orphans red both ways; both-empty = not adopted = green). `--self-test` plants synthetic trees and proves each clause can still fail. Template subset — does not check targets this scaffold does not ship. | CI; anyone adding or editing an obligation |
+| `bin/test` | Runs every suite in `tests/`, in shell or Python, and counts the `## SKIP <suite>/<case>` lines they print on stdout. Reports PASS / SKIP(n) / FAIL per suite and names every declined case; `--strict` makes a declined case a failure. An empty `tests/` is exit 2, not a pass. | CI; anyone before a push |
 
 ## `AGENTS.cases/` — layer-3 cases (filename is the directory)
 
@@ -99,6 +100,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 | Path | What it is for | Who reads it |
 |---|---|---|
 | `tests/test_evidence_artifacts.py` | Validates the record of every Group B verification: header completeness, evidence tag, `result`, forbidden content, per-artifact content rules. Passes vacuously with zero artifacts; `--require <phase>` turns it into a phase gate; `--self-test` proves the validator can still fail. Pure stdlib. | CI; anyone closing a phase gate |
+| `tests/test-runner.sh` | Tests `bin/test` itself against fixture suites in both languages: that a suite exiting 0 with a declined case is not a pass, that `--strict` turns one red, that an empty `tests/` is an error, and that no declined case in `tests/` lacks a marker the runner can count. | CI; anyone changing `bin/test` |
 
 ## `tools/` — tool layer
 

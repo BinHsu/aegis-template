@@ -72,6 +72,10 @@ __pycache__/
 venv/
 /bin/*
 !/bin/check
+# Default-deny above, one line per admitted script. bin/test is admitted because CI runs
+# it, and a script the workflow calls but git does not carry fails a fresh clone with a
+# missing-file error — which reads as a broken runner rather than as a missing line here.
+!/bin/test
 *.exe
 *.dll
 *.so
