@@ -1,3 +1,36 @@
+# ─── Deny dot-paths by default (must stay first) ──────────────
+# AG-GIT-DOTFILES (see BinHsu/aegis-template#5): a blocklist has to predict
+# each credential dotfile before it exists, and misses most of them
+# (.envrc, .netrc, .npmrc, .pypirc, .git-credentials, .ssh/, .docker/,
+# .kube/, .gnupg/, .direnv/, .codex/, .mcp.json, .scratch/, ... — measured
+# 14/18 unblocked). Default-deny + a small allowlist inverts that: only the
+# directories named below can ever be committed.
+#
+# Trap 1 — position, not style: .gitignore is last-match-wins. This block
+# MUST be the first thing in the file. Moving `.*` to the bottom (or adding
+# a later bare exclude of one of the allowlisted dirs) silently re-ignores
+# everything below, including .githooks/pre-commit itself. Verified: the
+# same six lines appended at the end of this file re-excluded every path
+# the allowlist is meant to protect.
+#
+# Trap 2 — negate directories, not files inside them: `!.claude/x` cannot
+# rescue `x` while `.claude/`'s *parent match* (`.*`) still applies — git
+# matches a no-slash pattern like `.*` against every path component, so an
+# excluded ancestor wins regardless of a child-level negation. The
+# allowlist below therefore negates the directories themselves
+# (`!.claude/`), not files under them.
+#
+# Accepted cost: any other new dotfile or dot-directory (.editorconfig,
+# .nvmrc, .npmrc if you genuinely need one committed, a future tool's
+# config) is blocked until it gets its own `!` line here — add that line
+# in the same commit that adds the file.
+.*
+!.gitignore
+!.claude/
+!.githooks/
+!.github/
+!.semgrep/
+
 # ─── Confidential — never commit ─────────────────────────────
 # Operator-local agent notes / personal overrides
 CLAUDE.local.md
