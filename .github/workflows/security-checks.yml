@@ -66,6 +66,22 @@ jobs:
       - name: Evidence artifacts well-formed
         run: python3 tests/test_evidence_artifacts.py
 
+      # ── The aggregate: what ran, and what only appeared to ──
+      # Every step above proves its checker can still fail. None of them can see the
+      # opposite failure — a checker that runs, finds nothing to check and exits 0. Two
+      # in this repo say so in their own output, and each carries a note to add a strict
+      # flag "once the suite is wired" with nothing tracking whether that happens.
+      # bin/test counts those declarations across suites and names every one in the log.
+      #
+      # Reporting mode, not --strict, and the reason is written here rather than left to
+      # be discovered: a freshly scaffolded repo legitimately has zero evidence
+      # artifacts, so --strict would be red from the first commit and would be switched
+      # off rather than acted on. Move this to --strict once the phase actually has
+      # evidence; that is the moment the exemption stops being true. Until then the log
+      # says which cases were skipped, which is the point.
+      - name: Test aggregate (declined cases are named, not hidden)
+        run: bin/test
+
       # ── Agent-policy checker: Codex budget + obligation↔case correspondence ──
       # A different mechanism from the evidence validator above. Prove the checker
       # can still fail, then run it. Without the self-test, a broken checker reports

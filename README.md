@@ -58,6 +58,8 @@ status banner in a README is worse than none, because it is read with confidence
 - `python3 scripts/cleanup-scanner.py` — real secret-residue scan (exit 1 on finding)
 - `python3 tests/test_evidence_artifacts.py` — validate manual-verification records
 - `python3 tests/test_evidence_artifacts.py --self-test` — prove that validator can still fail
+- `bin/test` — run every suite and name every case that declined to run
+- `bin/test --strict` — a declined case is a failure; the pre-push check
 - `bash bin/check --self-test` — prove the obligation↔case checker and the 32 KiB budget check can still fail
 - `bash bin/check` — Codex budget + obligation↔case correspondence (orphans red; both-empty green)
 - `python3 scripts/security-benchmark.py` — benchmark status (stubs report `NOT-IMPLEMENTED`)

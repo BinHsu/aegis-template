@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Run every suite in tests/, count what actually ran, and never let a skip read as a pass.
+#
+#   bin/test                     every suite; declined cases are listed, exit 0
+#   bin/test --strict            a declined case is a failure — use before a push
+#   bin/test test_evidence_...   only the named suites
+#
+# Why a runner and not one CI step per check. This repo already refuses to let a broken
+# validator look green — every checker has a --self-test step ahead of it. What nothing
+# watches is the opposite failure: a checker that runs, finds nothing to check, and exits
+# 0. Two of them say so in their own output today:
+#
+#   tests/test_evidence_artifacts.py  "0 present, nothing to check (vacuous pass)"
+#   scripts/security-benchmark.py     "Reports NOT-IMPLEMENTED ... never counts them as passes"
+#
+# Both carry a note to add a strict flag "once the suite is wired", and nothing tracks
+# whether that happens. A per-suite exit status structurally cannot express "passed
+# nothing", so the count has to live above the suites.
+#
+# The contract is one line on stdout, and it is language-agnostic on purpose — a Python
+# check and a shell check declare a skip the same way:
+#
+#   ## SKIP <suite>/<case> — <reason>
+#
+# A human sentence can still go to stderr. stderr is not countable by convention, which is
+# how a suite in another repo skipped three of its four cases and reported success for its
+# whole life (measured 2026-08-26).
+#
+# TESTS_DIR overrides where suites are found; tests/test-runner.sh uses it to run this
+# script against fixture suites whose outcomes are known in advance.
+
+set -uo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TESTS_DIR="${TESTS_DIR:-$REPO/tests}"
+
+STRICT=""
+WANTED=""
+for arg in "$@"; do
+  case "$arg" in
+    --strict) STRICT=1 ;;
+    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) echo "unknown flag: $arg" >&2; exit 2 ;;
+    *) WANTED="$WANTED ${arg%.*}" ;;
+  esac
+done
+
+# Discovery covers both languages this repo tests in. The interpreter is chosen by
+# extension rather than by a shebang, because a suite need not be executable — the one
+# this repo ships is mode 644 and is invoked as `python3 tests/...` in CI.
+shopt -s nullglob
+SUITES=""
+for f in "$TESTS_DIR"/test*.sh "$TESTS_DIR"/test*.py; do
+  name="$(basename "$f")"; name="${name%.*}"
+  if [ -n "$WANTED" ]; then
+    case " $WANTED " in *" $name "*) SUITES="$SUITES $f" ;; esac
+  else
+    SUITES="$SUITES $f"
+  fi
+done
+
+if [ -z "$SUITES" ]; then
+  echo "no suites found in $TESTS_DIR${WANTED:+ matching:$WANTED}" >&2
+  echo "A repo with no tests cannot report that it is broken; this is an error, not a pass." >&2
+  exit 2
+fi
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+: >"$TMP/all-skips"
+
+# bash 3.2 is what /usr/bin/env bash resolves to on macOS, so no mapfile and no
+# `${arr[@]}` on an empty array under `set -u`. Skips accumulate in a file instead.
+N_TOTAL=0; N_PASS=0; N_SKIP=0; N_FAIL=0; FAILED=""
+for f in $SUITES; do
+  name="$(basename "$f")"; name="${name%.*}"
+  N_TOTAL=$((N_TOTAL + 1))
+  printf '  %-30s ' "$name"
+  case "$f" in
+    *.py) python3 "$f" >"$TMP/$name.out" 2>"$TMP/$name.err" ;;
+    *.sh) bash "$f" >"$TMP/$name.out" 2>"$TMP/$name.err" ;;
+    *) "$f" >"$TMP/$name.out" 2>"$TMP/$name.err" ;;
+  esac
+  rc=$?
+  n_skips="$(grep -c '^## SKIP ' "$TMP/$name.out" 2>/dev/null || true)"
+  n_skips="${n_skips//[^0-9]/}"
+  : "${n_skips:=0}"
+  grep '^## SKIP ' "$TMP/$name.out" >>"$TMP/all-skips" 2>/dev/null || true
+  if [ "$rc" -ne 0 ]; then
+    echo "FAIL (exit $rc)"
+    FAILED="$FAILED $name"
+    N_FAIL=$((N_FAIL + 1))
+    sed 's/^/      /' "$TMP/$name.err" | tail -12
+    sed 's/^/      /' "$TMP/$name.out" | tail -12
+  elif [ "$n_skips" -gt 0 ]; then
+    echo "SKIP($n_skips)"
+    N_SKIP=$((N_SKIP + 1))
+  else
+    echo "PASS"
+    N_PASS=$((N_PASS + 1))
+  fi
+done
+
+TOTAL_SKIPS="$(grep -c '^## SKIP ' "$TMP/all-skips" 2>/dev/null || true)"
+TOTAL_SKIPS="${TOTAL_SKIPS//[^0-9]/}"
+: "${TOTAL_SKIPS:=0}"
+
+echo
+if [ "$TOTAL_SKIPS" -gt 0 ]; then
+  echo "  $TOTAL_SKIPS case(s) skipped — these were NOT tested:"
+  sed 's/^## SKIP /    /' "$TMP/all-skips"
+  echo
+fi
+echo "  $N_TOTAL suite(s): $N_PASS clean, $N_SKIP with skips, $N_FAIL failed"
+
+if [ "$N_FAIL" -gt 0 ]; then
+  echo "  FAILED:$FAILED" >&2
+  exit 1
+fi
+if [ -n "$STRICT" ] && [ "$TOTAL_SKIPS" -gt 0 ]; then
+  echo "  --strict: a skipped case is a failure here, because a skip that exits 0 is" >&2
+  echo "            indistinguishable from coverage. Run without --strict to accept it." >&2
+  exit 1
+fi
+exit 0
