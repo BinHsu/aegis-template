@@ -43,6 +43,14 @@ no index to read.** `bin/check` verifies the mapping is one-to-one in both direc
 this file against Codex's 32 KiB project-doc budget (overflow is silent truncation). Keep the angle
 brackets in examples like `<ID>` so the checker does not harvest them as real anchors.
 
+🔴 **When that budget check goes amber, the fix is layering, never deletion.** Overflow goes to
+**`conventions.md`** — the same-directory file this scaffold ships for exactly this moment. It holds
+what you need every session but whose breach costs nothing immediately: tool invocations, credential
+layout, naming, platform quirks. **Obligations stay here.** A budget warning is not evidence that a
+rule has stopped being needed, and the two must give the same answer at 29 KiB and at 32.7 KiB.
+⚠️ Shipping the alarm without a destination is what makes people delete rules under pressure, which
+is why the file exists before you need it.
+
 Open only that ID's case file when:
 
 1. The action sits on the literal boundary and you cannot tell whether it is in scope.
