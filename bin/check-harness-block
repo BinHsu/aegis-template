@@ -389,13 +389,18 @@ def self_test() -> int:
         # §9's region stops mid-section on purpose: the table is every repo's, the list of
         # repo-specific destructive operations is that repo's own. Adding the latter after the
         # closing marker must stay green; adding anything before it must not.
-        tail_marker = ("Other agents: honour this table.\n\n<!-- harness:end -->\n\n"
-                       "{{Add any repo-specific")
+        #
+        # This must not assume what follows the marker: in this template it is still the
+        # scaffold placeholder (`{{Add any repo-specific...}}`), but in any repo that has
+        # filled that placeholder in — i.e. every real consumer — the literal placeholder text
+        # is gone, and an assert pinned to it raised a bare AssertionError instead of running
+        # (aegis-template#11). Insert right after the blank line that follows
+        # `<!-- harness:end -->` and leave whatever comes next, placeholder or real text,
+        # exactly where it is.
+        tail_marker = "Other agents: honour this table.\n\n<!-- harness:end -->\n\n"
         assert agents.count(tail_marker) == 1
         tail_text = agents.replace(
-            tail_marker,
-            "Other agents: honour this table.\n\n<!-- harness:end -->\n\n"
-            "Publishing a package is destructive in this repo.\n\n{{Add any repo-specific", 1)
+            tail_marker, tail_marker + "Publishing a package is destructive in this repo.\n\n", 1)
         (tmpd / "tail").mkdir()
         (tmpd / "tail/AGENTS.md").write_text(tail_text)
         expect(0, "  a repo's own destructive-ops tail AFTER the §9 marker → green",
