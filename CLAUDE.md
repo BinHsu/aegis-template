@@ -26,16 +26,14 @@ classification they implement is defined in `AGENTS.md`, not here — settings a
 
 ## Delegation boundary
 
-- Keep the main session for orchestration, decisions and merge-gating. Delegate independent,
-  citation-driven or multi-file work.
-- **Work needing interactive per-action approval stays in the main session.** A subagent cannot
-  reliably obtain fresh approval, so a permission-gated call can fail silently.
-- Name the model when spawning and pick it by stakes: triage and read fan-out → cheap tier;
-  exploration and light synthesis → mid tier; cross-file reasoning and decide-what-to-change → top
-  tier. An expensive model watching logs scroll is waste — polling is a mechanism job, not an agent
-  job.
-- **Never read a spawned subagent's `.output` file via the shell.** It is the full JSONL
-  conversation transcript and will overflow context. Use the agent's returned result.
+Delegation is the default; what stays in the main session is orchestration, decisions,
+merge-gating, and **anything needing interactive per-action approval** — a subagent cannot obtain
+fresh approval, so a permission-gated call fails silently.
+
+**Full text — the mask, why "it's only one thing" is not an exception, the model grade per stakes,
+and why a spawned agent's `.output` file must never be read from the shell — is
+`~/.claude/ENGINEERING.md` section "Delegation", expanded in the `delegation` skill.** One home per
+rule; this section is the pointer, not a second copy.
 
 ## Conflict resolution
 

@@ -3,10 +3,12 @@
 > **This file is the single source of truth for project status.** If any other document disagrees
 > with it, this one wins and the drift should be fixed. See `AGENTS.md` §3.
 
-**Last updated:** 2026-08-26 — issue **#5** (`.gitignore` blocklist gap) addressed on branch
-`issue-5-gitignore-default-deny`, PR opened against `main`, not yet merged. Base for this work:
-[PR #3](https://github.com/BinHsu/aegis-template/pull/3) squash-merged to `main` as `cb706c7`.
-Issues **#1** and **#2** closed completed. Merge CI `32900273254` settled green.
+**Last updated:** 2026-09-04 — branch `harness-block` opened off `main` @ `53abb0b`, carrying the
+D1 ruling in `BinHsu/dotClaude#34`: the `AGENTS.md` harness content is now stamped with
+`<!-- harness:begin v=1 -->` markers, recorded in `harness/`, and audited by
+`bin/check-harness-block` (warn-and-diff, never rewrite). PR open against `main`, **not merged**.
+Everything described in §2a below as issue **#5** work is now merged (`3b294cf`); `main` has also
+taken PR **#8** (`d5112d8`, vacuous-checker counting) and `53abb0b` (`conventions.md`).
 
 ---
 
@@ -32,7 +34,40 @@ self-test-then-run.
 | `cb706c7` | Squash of PR #3: three-layer skeleton, orphan-refusing checker, AG-GIT pointer |
 | `b7b2ded` | Add a per-file index, Codex-runnable acceptance criteria, and fix checks that could not fail |
 
-## 2a. In progress — not yet merged
+## 2a. In progress — not yet merged: branch `harness-block`
+
+Related issue: `BinHsu/dotClaude#34` (cross-repo; that issue tracks all three PRs and must stay
+open until the console repo's PR lands too — so this PR says `參見 #34`, never a closing keyword).
+
+**What changed, and why each way round.** Codex and Cursor do not expand `@` imports, so harness
+policy cannot be imported into a scaffolded repo — it must exist physically there. This branch stops
+treating that forced copy as trustworthy:
+
+- `AGENTS.md`: four `<!-- harness:begin v=1 -->` … `<!-- harness:end -->` regions around exactly the
+  content every scaffolded repo must carry verbatim. The `{{placeholders}}`, §1, §2, §13 and §9's
+  repo-specific destructive-operations tail all sit **outside** the markers, on purpose.
+- `bin/check-harness-block` (new): extracts the regions, hashes them against `harness/HASH`, and on
+  drift names the section and prints a unified diff. Takes a path, so a fresh clone of this template
+  can audit a downstream repo. **Exits non-zero, never edits a file, and has no `--fix`.**
+  16 self-test assertions.
+- `bin/check`: third clause, delegating to the above; three more self-test assertions prove the
+  wiring and the tally still react.
+- **Backflowed** §12 from a consumer repo, whose six-line pointer at the
+  `no-vacuous-checks` skill is *newer* than the 26 lines this template still carried.
+- **Pointers, not deletions:** §8 → `~/.claude/ENGINEERING.md` "When to stop, and when to keep
+  going"; §11 step 4 → its "Records" diff-table rule; `CLAUDE.md` "Delegation boundary" → its
+  "Delegation" section plus the `delegation` skill. Each keeps one sentence stating the rule.
+- **Moved in** from the console repo: the non-Claude bootstrap banner and
+  `scripts/read-global-policy.py` it names.
+- §5 (evidence tags) is general, not scaffold-specific. It is **marked** a candidate to move up to
+  `~/.claude/ENGINEERING.md` (`BinHsu/dotClaude#34`) and left here **in full** — moving it is
+  another repo's PR, and until it exists there this is the only copy.
+
+🔴 **Why the audit only warns.** Measured 2026-09-04: a consumer repo's §12 was *newer*
+than this template's. An auto-sync in either direction would have destroyed the good copy silently.
+Which side moves is a human decision, every time. Reasoning: `AGENTS.cases/AG-HARNESS.md`.
+
+## 2b. Merged earlier — issue #5 (`.gitignore` default-deny)
 
 **Issue #5**: `.gitignore` was a pure blocklist and missed 14 of 18 credential-bearing dotfiles
 (`.envrc`, `.netrc`, `.npmrc`, `.pypirc`, `.git-credentials`, `.ssh/`, `.docker/`, `.kube/`,
@@ -61,8 +96,8 @@ missing PEM-block pattern.
 
 ## 3. Repository state
 
-- Branch: `main` @ `cb706c7`; work-in-progress branch `issue-5-gitignore-default-deny` off `main`
-  @ `d751c05`, PR open against `main` (see PR link in the commit this file is part of / `gh pr list`)
+- Branch: `harness-block` off `main` @ `53abb0b`, PR open against `main`, **not merged**.
+  `main` @ `53abb0b`. Re-read with `git log --oneline -5` and `gh pr list` rather than this line.
 - Remote: `https://github.com/BinHsu/aegis-template.git`
 - Visibility: public template repository
 - Local path is machine-specific and deliberately not recorded here.
@@ -87,10 +122,22 @@ gh run watch 32900273254 --exit-status
 Local before merge of PR #3: `bash bin/check --self-test` (38 assertions) and `bash bin/check`
 (2:2, 13650 B / 41%).
 
-For issue #5 (this branch): `bash bin/check` (2:2, green, unaffected — `.gitignore` is outside its
-budget/correspondence scope), `python3 scripts/cleanup-scanner.py` (clean), `python3
-tests/test_evidence_artifacts.py` (vacuous pass, unaffected), and the 31-case
-`git check-ignore --no-index -q` matrix described in 2a.
+For issue #5 (branch since merged): `bash bin/check` (2:2, green), `python3
+scripts/cleanup-scanner.py` (clean), `python3 tests/test_evidence_artifacts.py` (vacuous pass), and
+the 31-case `git check-ignore --no-index -q` matrix described in 2b.
+
+For branch `harness-block`:
+
+```
+python3 bin/check-harness-block --self-test        # 16 assertions, all as expected
+bash bin/check --self-test                         # 41 assertions (was 38), all as expected
+bash bin/check                                     # 3 clauses green: budget 46%, 3:3 cases, block v=1
+python3 bin/check-harness-block                    # green against this repo's own AGENTS.md
+python3 bin/check-harness-block <path-to-a-consumer-repo>/AGENTS.md   # exit 1, 6 of 13 sections
+```
+
+The console repo was read only; `git -C ~/a consumer repo status --porcelain` was empty
+before and after.
 
 ## 6. Test results
 
@@ -100,7 +147,12 @@ tests/test_evidence_artifacts.py` (vacuous pass, unaffected), and the 31-case
 | **main** CI `32900273254` after merge | green (`VERIFIED`, `gh run watch --exit-status`) |
 | Issue #5 branch, local `bin/check` | green, 2:2, unaffected by this change |
 | Issue #5 branch, 31-case gitignore matrix | all pass (see 2a) |
-| Issue #5 PR CI | not yet observed — watch the run after push, per this repo's own §8 (don't
+| Issue #5 PR CI | green; merged as `3b294cf` |
+| `harness-block`, `bin/check-harness-block --self-test` | 16/16 as expected |
+| `harness-block`, `bin/check --self-test` | 41/41 as expected |
+| `harness-block`, `bin/check` | green, 3 clauses, none yellow |
+| `harness-block`, audit vs a consumer repo | exit 1 as designed — unstamped, and 6 of 13 canonical sections drifted or missing (that repo's PR is the third in `BinHsu/dotClaude#34`) |
+| `harness-block` PR CI | not yet observed — watch the run after push, per this repo's own §8 (don't
   stop at "pushed"; watch until it settles) |
 
 ## 7. Current blockers, in priority order
@@ -110,20 +162,23 @@ not a blocker on further agent work.
 
 ## 8. AWAITING DECISION — owner only
 
-- **Merge or reject PR for issue #5.** If rejected, the grounds belong in a PR comment before
-  closing it (see `~/.claude/ENGINEERING.md` "Handoff is git and only git" — rejecting is an
-  action, not a close).
+- **Merge or reject the `harness-block` PR.** If rejected, the grounds belong in a PR comment
+  before closing it (see `~/.claude/ENGINEERING.md` "Handoff is git and only git" — rejecting is an
+  action, not a close), and the branch stays.
+- **Whether §5 (evidence tags) moves up to `~/.claude/ENGINEERING.md`.** Marked as a candidate in
+  this PR, text unmoved. That is a different repo's change.
 
 ## 9. Exact next safe action
 
 ```bash
-gh pr checks --repo BinHsu/aegis-template <PR-number-for-issue-5>
+gh pr checks --repo BinHsu/aegis-template <PR-number-for-harness-block>
 ```
 
-If green and the owner has not yet ruled, the next work is whatever the owner files next — do not
-invent a ticket. The pre-commit content-scan gap noted in 2a is a candidate for a **new** issue,
-not silently folded into #5's scope. Do not copy the ENGINEERING.md See / verdict / edit table
-into this template.
+If green and the owner has not yet ruled, the next work in `BinHsu/dotClaude#34`'s sequence is the
+**console repo's** PR (a consumer repo: stamp its block, split its §13, take this
+template's `AG-LAYER` and `## git`) — and it is only unblocked once this one is merged, because it
+depends on the marker convention and on `harness/`. Do not start it here. Do not copy the
+ENGINEERING.md See / verdict / edit table into this template.
 
 ## 10. Things that will bite you
 
@@ -139,6 +194,16 @@ into this template.
   `YOUR-ID` without brackets turned `bin/check` red.
 - **`/bin/` in `.gitignore` would have dropped `bin/check` with no error.** Current pattern is
   `/bin/*` plus `!/bin/check`.
+- **Never add auto-sync to the harness block.** Measured 2026-09-04: a consumer repo's §12 was
+  newer than this template's, so an auto-sync would have overwritten the good copy with the stale
+  one. `bin/check-harness-block` has no `--fix` and its emit flags print to stdout on purpose.
+- **After editing anything inside the `harness:` markers, re-emit both `harness/` files** and bump
+  `v=`, in the same commit. `bin/check` goes red otherwise — that is the point.
+- **`!/bin/check` in `.gitignore` is an exact match, not a prefix.** `bin/check-harness-block`
+  needed its own `!` line or it would have been untracked in every scaffolded repo, i.e. the audit
+  would have silently not existed.
+- **`scripts/check-file-map.sh` is a `PostToolUse` hook and reads a JSON payload on stdin.** Run by
+  hand with no stdin it hangs; that is not a failure of the check.
 - **`main` requires a squash PR** (ruleset `main-protection`: linear history, required review,
   required signatures). Direct push is blocked; admin bypass exists. A merge run is a different
   CI run from the PR's — watch it.

@@ -36,7 +36,8 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 | `PRODUCT_SENSE.md` | The product red line that hidden destructive actions are a defect, plus the preview/confirm/log/abort protocol. Restates the protocol also given in `AGENTS.md` §10. | Any agent before a destructive command |
 | `.gitignore` | Declares what must never be committed. **Default-deny at the top**: `.*` blocks every dot-path, then a small allowlist (`!.gitignore`, `!.claude/`, `!.githooks/`, `!.github/`, `!.semgrep/`) re-admits the tracked scaffold directories — closes the 14/18-credential-dotfile gap a pure blocklist left open (issue #5). The block's own comments carry the two silent traps: position (`.*` must stay first, last-match-wins) and directory-not-file negation. `/bin/*` ignores build output in that directory; `!/bin/check` allow-lists the agent-policy checker (a negation cannot re-include a file whose *parent directory* is excluded — `AGENTS.md` §7). Adding a new tracked dotfile or dot-directory needs its own `!` line in the same commit. | Anyone adding a file type or dotfile that might carry secrets |
 | `docs/FILE-MAP.md` | This file. The exhaustive manifest. | Anyone about to create a new file |
-| `bin/check` | Harness-independent checker: Codex 32 KiB budget (silent truncation, 85% warn band exits 3) and obligation↔case correspondence (orphans red both ways; both-empty = not adopted = green). `--self-test` plants synthetic trees and proves each clause can still fail. Template subset — does not check targets this scaffold does not ship. | CI; anyone adding or editing an obligation |
+| `bin/check` | Harness-independent checker, three clauses: Codex 32 KiB budget (silent truncation, 85% warn band exits 3), obligation↔case correspondence (orphans red both ways; both-empty = not adopted = green), and the vendored harness block (delegated to `bin/check-harness-block`). `--self-test` plants synthetic trees and proves each clause can still fail. Template subset — does not check targets this scaffold does not ship. | CI; anyone adding or editing an obligation |
+| `bin/check-harness-block` | Audits one repo's vendored `AGENTS.md` harness block against `harness/`: extracts the `<!-- harness:begin v=N -->` regions, hashes them, and on drift names the section and prints a unified diff. Takes a path so a fresh template clone can audit a consumer repo; handles an unstamped copy by comparing section by section. **Exits non-zero on drift and never writes to the file it audits** — `--emit-canonical` / `--emit-hash` print to stdout. `--self-test` proves red goes red and green goes green. | CI; anyone editing anything inside the markers; anyone auditing a scaffolded repo |
 | `bin/test` | Runs every suite in `tests/`, in shell or Python, and counts the `## SKIP <suite>/<case>` lines they print on stdout. Reports PASS / SKIP(n) / FAIL per suite and names every declined case; `--strict` makes a declined case a failure. An empty `tests/` is exit 2, not a pass. | CI; anyone before a push |
 
 ## `AGENTS.cases/` — layer-3 cases (filename is the directory)
@@ -46,6 +47,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 | `AGENTS.cases/README.md` | Explains layer 3: no index, cases must not add obligations, angle-bracket trick so examples are not harvested as anchors. Carries no `case:` marker. | Anyone about to add or open a case |
 | `AGENTS.cases/AG-LAYER.md` | Seed case for `obligation:AG-LAYER`. Why layering is not slimming, why the filename is the index, how to add the next obligation, and that this mechanism is not the evidence-artifact checker. | Anyone in doubt about the three-layer split, or editing `AGENTS.md` / `bin/check` |
 | `AGENTS.cases/AG-GIT.md` | Case for `obligation:AG-GIT`. Why stay-put lives in `~/.claude/ENGINEERING.md` (See / verdict / edit), not as a second copy in this template; the 2026-08-24 five-repo incident. | Anyone about to edit another repo "while here", or rewriting the git pointer |
+| `AGENTS.cases/AG-HARNESS.md` | Case for `obligation:AG-HARNESS`. Why the harness block is duplicated rather than imported (Codex/Cursor do not expand `@`), why the audit may only warn — the 2026-09-04 measurement in which a consumer repo's §12 was newer than the template's — what the travelling canonical record cannot tell you, and the emit/bless commands. | Anyone editing inside the harness markers, bumping `v=`, or tempted to add auto-sync |
 
 ## `.claude/` — Claude Code harness
 
@@ -92,6 +94,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 | `scripts/audit-tool-registry.sh` | Finds holes in the tool layer: tools called in code but undeclared, declared tools with no timeout, destructive tools with no approval gate. Exits non-zero on any finding and reports `SKIPPED` for the section it could not evaluate. Needs `yq`. | CI; anyone adding a tool |
 | `scripts/check-file-map.sh` | `PostToolUse(Write)` hook backing this index. Nags when a newly written, non-ignored, in-repo path is missing here. Never blocks, always exits 0. | Claude Code (automatically) |
 | `scripts/cleanup-scanner.py` | Real secret-residue scan of the working tree and staged diff: sensitive filenames, tracked `.env` files, hardcoded-credential patterns. Exit 1 on any finding. Pure stdlib. | CI; the pre-commit hook; anyone ending a session |
+| `scripts/read-global-policy.py` | Prints `~/.claude/CLAUDE.md` and every file it pulls in with a leading `@path`, recursively. The bootstrap for agents that do not expand `@` imports — Codex, Cursor, anything new — so "the global rules did not load" becomes a non-zero exit instead of silence. Named in `AGENTS.md`'s banner. Pure stdlib. | Any non-Claude-Code agent, before its first action |
 | `scripts/safe-exec.sh` | Wraps a destructive command in preview → confirm → log → execute, so destruction is never the silent default. | Anyone aliasing a dangerous command |
 | `scripts/security-benchmark.py` | Security asserted as a benchmark rather than a review item. **Ships with three unimplemented benchmarks that report `NOT-IMPLEMENTED` and are never counted as passes.** `--require-implemented` turns it into a gate once wired. | CI; whoever specialises the benchmarks per stack |
 
@@ -101,6 +104,14 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 |---|---|---|
 | `tests/test_evidence_artifacts.py` | Validates the record of every Group B verification: header completeness, evidence tag, `result`, forbidden content, per-artifact content rules. Passes vacuously with zero artifacts; `--require <phase>` turns it into a phase gate; `--self-test` proves the validator can still fail. Pure stdlib. | CI; anyone closing a phase gate |
 | `tests/test-runner.sh` | Tests `bin/test` itself against fixture suites in both languages: that a suite exiting 0 with a declined case is not a pass, that `--strict` turns one red, that an empty `tests/` is an error, and that no declined case in `tests/` lacks a marker the runner can count. | CI; anyone changing `bin/test` |
+
+## `harness/` — canonical record of the vendored `AGENTS.md` block
+
+| Path | What it is for | Who reads it |
+|---|---|---|
+| `harness/README.md` | How to re-emit the two generated files and the one-line reason they exist. Points at the rule (`AGENTS.md` "harness block") and the reasoning (`AGENTS.cases/AG-HARNESS.md`) rather than restating either. | Anyone about to hand-edit this directory |
+| `harness/AGENTS.harness.md` | **Generated.** The harness regions extracted from `AGENTS.md`, each tagged `mode=exact` or `mode=prefix`. The baseline every consumer copy is diffed against. No agent loads it. | `bin/check-harness-block` |
+| `harness/HASH` | **Generated.** `version:` / `sha256:` / `source:` / `regions:` for the canonical above. A mismatch between this and the text is exit 2 (no trustworthy baseline), never a verdict. | `bin/check-harness-block` |
 
 ## `tools/` — tool layer
 

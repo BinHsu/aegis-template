@@ -1,0 +1,500 @@
+#!/usr/bin/env python3
+"""Audit one repo's vendored harness block against this template's canonical copy.
+
+    bin/check-harness-block                  audit this repo's own AGENTS.md
+    bin/check-harness-block <path>           audit another repo's AGENTS.md (file or directory)
+    bin/check-harness-block --emit-canonical print the canonical block extracted from this AGENTS.md
+    bin/check-harness-block --emit-hash      print the harness/HASH body for that canonical
+    bin/check-harness-block --self-test      prove the audit can still go red and still go green
+
+EXIT CODE is the contract
+  0  the block matches the canonical record
+  1  drift — the block differs, or is missing, or is unstamped. Someone has to decide which side wins
+  2  cannot run (no canonical record, unreadable target, disagreeing version stamps)
+
+WHY THIS EXISTS, AND WHY IT ONLY SHOUTS
+Codex and Cursor do not expand `@` imports, so harness policy cannot live in one shared file and be
+imported: it has to exist physically in every repo scaffolded from this template. The duplication is
+forced. What is not forced is trusting it — a vendored copy gets a checksum, exactly like `go.sum`
+or a `git subtree` import, and the boundary markers are HTML comments so the carrier stays Markdown.
+
+🔴 This script NEVER writes to a file it is auditing, and no flag makes it. Drift is bidirectional:
+on 2026-09-04 a consumer repo's §12 was measured *newer* than this template's, so an auto-sync would
+have overwritten the good copy with the stale one. Which side changes is a human decision, every
+time. `--emit-canonical` and `--emit-hash` print to stdout; the maintainer redirects them, and that
+redirection is the deliberate human act of blessing a new version.
+
+WHAT "CANONICAL" MEANS HERE, AND WHAT IT DOES NOT
+`harness/AGENTS.harness.md` is this repo's vendored-copy record. In a scaffolded repo it catches the
+common drift — somebody edited the block in place. It cannot catch "the upstream template has moved
+on", because the record travelled with the copy. That second question is answered by running this
+script *from a fresh template clone* against the consumer's AGENTS.md, which is why the path
+argument exists.
+
+MARKERS ARE WHOLE-LINE ONLY
+`<!-- harness:begin v=N -->` / `<!-- harness:end -->` count only when they are the entire line. That
+is what lets AGENTS.md quote its own markers in prose without the quote becoming a region boundary —
+the same trap `bin/check` avoids for `<!-- obligation:<ID> -->` by keeping the angle brackets.
+
+REGION MODES
+A region that stops at a section boundary is `exact`: the target's section must match byte for byte.
+A region that stops in the middle of a section is `prefix`: the canonical text must be the opening
+of the target's section, and the target may continue. §9 is the reason — its table is the same in
+every repo and its list of repo-specific destructive operations is the repo's own.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from difflib import unified_diff
+from pathlib import Path
+
+BEGIN = re.compile(r"^<!--\s*harness:begin\s+v=(\d+)\s*-->$")
+END = re.compile(r"^<!--\s*harness:end\s*-->$")
+REGION = re.compile(r"^<!--\s*harness:region\s+mode=(exact|prefix)\s*-->$")
+HEADING = re.compile(r"^##\s+\S")
+
+REPO = Path(__file__).resolve().parent.parent
+CANONICAL = Path(os.environ.get("HARNESS_CANONICAL", REPO / "harness/AGENTS.harness.md"))
+HASHFILE = Path(os.environ.get("HARNESS_HASH", REPO / "harness/HASH"))
+SOURCE = "BinHsu/aegis-template harness/AGENTS.harness.md"
+
+
+# ── parsing ──────────────────────────────────────────────────────────────────
+
+
+def extract_regions(text: str) -> tuple[list[tuple[str, str]], int | None]:
+    """Return [(mode, text)] for each begin/end region, plus the version stamp."""
+    lines = text.splitlines(keepends=True)
+    regions: list[tuple[int, int]] = []  # (first body line, last body line exclusive)
+    versions: set[int] = set()
+    open_at: int | None = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        begin = BEGIN.match(stripped)
+        if begin:
+            if open_at is not None:
+                raise ValueError(f"line {i + 1}: harness:begin inside an open region")
+            versions.add(int(begin.group(1)))
+            open_at = i + 1
+            continue
+        if END.match(stripped):
+            if open_at is None:
+                raise ValueError(f"line {i + 1}: harness:end with no open region")
+            regions.append((open_at, i))
+            open_at = None
+    if open_at is not None:
+        raise ValueError("harness:begin is never closed")
+    if len(versions) > 1:
+        raise ValueError(f"regions disagree on version: {sorted(versions)}")
+
+    out: list[tuple[str, str]] = []
+    for n, (start, stop) in enumerate(regions):
+        body = "".join(lines[start:stop]).strip("\n") + "\n"
+        # `exact` when what follows the region opens a new `## ` section; the next region
+        # counts as "what follows", since regions are separated only by blank lines.
+        mode = "prefix"
+        tail = lines[stop + 1 :]
+        for line in tail:
+            s = line.strip()
+            if not s or s == "---" or BEGIN.match(s) or END.match(s):
+                continue
+            mode = "exact" if HEADING.match(s) else "prefix"
+            break
+        else:
+            mode = "exact"  # region runs to end of file
+        out.append((mode, body))
+    return out, (versions.pop() if versions else None)
+
+
+def parse_canonical(text: str) -> list[tuple[str, str]]:
+    regions: list[tuple[str, list[str]]] = []
+    for line in text.splitlines(keepends=True):
+        marker = REGION.match(line.strip())
+        if marker:
+            regions.append((marker.group(1), []))
+            continue
+        if regions:
+            regions[-1][1].append(line)
+    return [(mode, "".join(body).strip("\n") + "\n") for mode, body in regions]
+
+
+def split_sections(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """(text before the first `## ` heading, [(heading, section text incl. heading)])."""
+    preamble: list[str] = []
+    sections: list[tuple[str, list[str]]] = []
+    for line in text.splitlines(keepends=True):
+        if HEADING.match(line.strip()) and not line.startswith(" "):
+            sections.append((line.strip(), [line]))
+        elif sections:
+            sections[-1][1].append(line)
+        else:
+            preamble.append(line)
+    return "".join(preamble), [(h, "".join(b)) for h, b in sections]
+
+
+def strip_markers(text: str) -> str:
+    """Drop whole-line harness markers, so a target's sections compare against canonical
+    bodies (which have the markers stripped) without the boundary lines reading as drift."""
+    return "".join(
+        line for line in text.splitlines(keepends=True)
+        if not BEGIN.match(line.strip()) and not END.match(line.strip())
+    )
+
+
+def only_separator(text: str) -> bool:
+    """True when what is left over is a horizontal rule and blank lines — layout, not rules.
+    A region ends before the `---` that separates it from the repo-local sections, so that
+    rule is legitimately absent from the canonical and must not be reported as drift."""
+    return all(line.strip() in ("", "---") for line in text.splitlines())
+
+
+def digest(regions: list[tuple[str, str]]) -> str:
+    payload = "".join(f"{mode}\n{body}" for mode, body in regions)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def canonical_sha() -> str | None:
+    if not HASHFILE.is_file():
+        return None
+    for line in HASHFILE.read_text().splitlines():
+        if line.startswith("sha256:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+# ── reporting ────────────────────────────────────────────────────────────────
+
+
+def diff(want: str, got: str, want_label: str, got_label: str, indent: str) -> None:
+    for line in unified_diff(
+        want.splitlines(keepends=True), got.splitlines(keepends=True),
+        fromfile=want_label, tofile=got_label, n=1,
+    ):
+        sys.stdout.write(indent + line if line.endswith("\n") else indent + line + "\n")
+
+
+def compare_by_section(canon: list[tuple[str, str]], target_text: str, label: str) -> int:
+    """Locate drift section by section. Returns the number of differing sections."""
+    canon_text = "".join(body for _, body in canon)
+    canon_pre, canon_secs = split_sections(canon_text)
+    clean = strip_markers(target_text)
+    _, target_secs = split_sections(clean)
+    target_by_heading = dict(target_secs)
+
+    # A region ending mid-section makes that section prefix-compared.
+    prefix_headings: set[str] = set()
+    for mode, body in canon:
+        if mode == "prefix":
+            _, secs = split_sections(body)
+            if secs:
+                prefix_headings.add(secs[-1][0])
+
+    bad = 0
+    if canon_pre.strip() and canon_pre.strip() not in clean:
+        bad += 1
+        print("      · preamble (the banner above the first `## ` heading) differs")
+        tgt_pre, _ = split_sections(clean)
+        diff(canon_pre, tgt_pre, "canonical/preamble", f"{label}/preamble", "        ")
+
+    for heading, body in canon_secs:
+        if heading not in target_by_heading:
+            bad += 1
+            print(f"      · MISSING from {label}: {heading}")
+            continue
+        got = target_by_heading[heading]
+        want_body, got_body = body.strip("\n"), got.strip("\n")
+        if got_body.startswith(want_body):
+            leftover = got_body[len(want_body):]
+            # prefix regions may be continued by the repo; exact regions may only be followed
+            # by layout (the `---` that lives outside the region, blank lines).
+            if heading in prefix_headings or only_separator(leftover):
+                continue
+        bad += 1
+        mode = "prefix" if heading in prefix_headings else "exact"
+        print(f"      · DRIFTED ({mode}): {heading}")
+        diff(body, got, f"canonical{heading[:40]}", f"{label}{heading[:40]}", "        ")
+    return bad
+
+
+# ── the check ────────────────────────────────────────────────────────────────
+
+
+def resolve_target(arg: str | None) -> Path:
+    if arg is None:
+        return REPO / "AGENTS.md"
+    p = Path(arg).expanduser()
+    return p / "AGENTS.md" if p.is_dir() else p
+
+
+def check(arg: str | None) -> int:
+    target = resolve_target(arg)
+    label = str(target)
+
+    if not CANONICAL.is_file():
+        print(f"  ✘ harness-block — no canonical record at {CANONICAL}")
+        print("      Without it there is nothing to audit against, and that is not a pass.")
+        print("      Fix: bin/check-harness-block --emit-canonical > harness/AGENTS.harness.md")
+        return 2
+    want = parse_canonical(CANONICAL.read_text())
+    if not want:
+        print(f"  ✘ harness-block — {CANONICAL} carries no <!-- harness:region --> markers")
+        return 2
+    want_sha = canonical_sha()
+    if want_sha is None:
+        print(f"  ✘ harness-block — {HASHFILE} is missing or has no sha256: line")
+        return 2
+    if digest(want) != want_sha:
+        print(f"  ✘ harness-block — {CANONICAL} does not hash to the sha256 in {HASHFILE}")
+        print(f"      recorded {want_sha}")
+        print(f"      actual   {digest(want)}")
+        print("      The record and the text disagree; the audit has no trustworthy baseline. exit 2")
+        return 2
+
+    if not target.is_file():
+        print(f"  ✘ harness-block — {label} does not exist")
+        print("      A repo with no AGENTS.md carries no harness block at all. This is the worst case.")
+        return 1
+    text = target.read_text()
+
+    try:
+        got, version = extract_regions(text)
+    except ValueError as exc:
+        print(f"  ✘ harness-block — {label}: {exc}")
+        return 1
+
+    n_sections = sum(len(split_sections(b)[1]) for _, b in want)
+    if not got:
+        print(f"  ✘ harness-block — {label} carries no <!-- harness:begin v=N --> markers")
+        print(f"      This copy predates harness stamping, so its block cannot be hashed. Comparing")
+        print(f"      the canonical's {n_sections} sections against it by heading instead:")
+        bad = compare_by_section(want, text, label)
+        if bad == 0:
+            print(f"      · every canonical section is present and matches — only the markers are absent")
+            print(f"      Fix: wrap the block in the markers and copy harness/ across; content is already in step.")
+        else:
+            print(f"      {bad} of {n_sections} canonical sections drifted or are missing (above).")
+        print("      🔴 Do not auto-apply either direction. Read the diff and decide which side is newer.")
+        return 1
+
+    got_sha = digest(got)
+    if got_sha == want_sha:
+        print(f"  ✔ harness-block — {label} block matches canonical v={version} "
+              f"({len(got)} regions, {n_sections} sections, sha256 {got_sha[:12]})")
+        return 0
+
+    print(f"  ✘ harness-block — {label} block (v={version}) does not match canonical")
+    print(f"      recorded {want_sha}")
+    print(f"      actual   {got_sha}")
+    print(f"      canonical is {SOURCE}")
+    compare_by_section(want, text, label)
+    print("      🔴 This script does not choose. Drift is bidirectional — a consumer's section can be")
+    print("         newer than the template's (measured 2026-09-04, §12). Decide, edit one side by hand,")
+    print("         bump v= and re-emit the canonical if the template is the side that moves.")
+    return 1
+
+
+# ── canonical emission (stdout only) ─────────────────────────────────────────
+
+
+def emit_canonical() -> int:
+    regions, version = extract_regions((REPO / "AGENTS.md").read_text())
+    if not regions:
+        print("AGENTS.md has no harness:begin/end markers", file=sys.stderr)
+        return 2
+    sys.stdout.write(
+        "<!-- Canonical harness block, extracted from this repo's AGENTS.md. Generated by\n"
+        "     bin/check-harness-block --emit-canonical; do not hand-edit — edit AGENTS.md and re-emit.\n"
+        f"     Version v={version}. mode=exact means the target section must match byte for byte;\n"
+        "     mode=prefix means the canonical text must be the opening of the target's section and\n"
+        "     the target may continue (a repo's own additions). -->\n"
+    )
+    for mode, body in regions:
+        sys.stdout.write(f"\n<!-- harness:region mode={mode} -->\n{body}")
+    return 0
+
+
+def emit_hash() -> int:
+    if not CANONICAL.is_file():
+        print(f"no canonical at {CANONICAL}; emit it first", file=sys.stderr)
+        return 2
+    regions = parse_canonical(CANONICAL.read_text())
+    _, version = extract_regions((REPO / "AGENTS.md").read_text())
+    print("# Canonical hash of the vendored harness block. Read by bin/check-harness-block.")
+    print("# sha256 covers each region's mode and body, in file order — not the comment lines.")
+    print("# Bumping version is a human act: edit AGENTS.md, re-emit both files, say why in the commit.")
+    print(f"version: {version}")
+    print(f"sha256: {digest(regions)}")
+    print(f"source: {SOURCE}")
+    print(f"regions: {len(regions)}")
+    return 0
+
+
+# ── self-test ────────────────────────────────────────────────────────────────
+
+
+def self_test() -> int:
+    run = fail = 0
+
+    def expect(want: int, label: str, *args: str) -> None:
+        nonlocal run, fail
+        run += 1
+        proc = subprocess.run([sys.executable, __file__, *args], capture_output=True, text=True)
+        if proc.returncode == want:
+            print(f"  ✔ {label} — expected exit {want}, got {proc.returncode}")
+            return
+        fail += 1
+        print(f"  ✘ {label} — expected exit {want}, got {proc.returncode}")
+        print("      " + proc.stdout.replace("\n", "\n      "))
+
+    def expect_out(needle: str, label: str, *args: str) -> None:
+        nonlocal run, fail
+        run += 1
+        proc = subprocess.run([sys.executable, __file__, *args], capture_output=True, text=True)
+        if needle in proc.stdout:
+            print(f"  ✔ {label} — output mentions 「{needle}」")
+            return
+        fail += 1
+        print(f"  ✘ {label} — output does not mention 「{needle}」")
+        print("      " + proc.stdout.replace("\n", "\n      "))
+
+    print("── self-test: plant drift → red → restore → green ──")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpd = Path(tmp)
+        agents = (REPO / "AGENTS.md").read_text()
+
+        (tmpd / "green").mkdir()
+        (tmpd / "green/AGENTS.md").write_text(agents)
+        expect(0, "  byte-identical copy → green", str(tmpd / "green"))
+
+        (tmpd / "drift").mkdir()
+        (tmpd / "drift/AGENTS.md").write_text(
+            agents.replace("Write it vendor-neutral.", "Write it however you like.", 1))
+        expect(1, "  one sentence changed inside the block → red", str(tmpd / "drift"))
+        expect_out("## 3. Single source of status", "  red names the drifted section",
+                   str(tmpd / "drift"))
+        expect_out("Write it however you like", "  red prints the actual diff line",
+                   str(tmpd / "drift"))
+
+        (tmpd / "outside").mkdir()
+        (tmpd / "outside/AGENTS.md").write_text(
+            agents.replace("## 1. What this repo is", "## 1. What this service does", 1))
+        expect(0, "  edit OUTSIDE the block (§1, repo-local) → green", str(tmpd / "outside"))
+
+        # §9's region stops mid-section on purpose: the table is every repo's, the list of
+        # repo-specific destructive operations is that repo's own. Adding the latter after the
+        # closing marker must stay green; adding anything before it must not.
+        tail_marker = ("Other agents: honour this table.\n\n<!-- harness:end -->\n\n"
+                       "{{Add any repo-specific")
+        assert agents.count(tail_marker) == 1
+        tail_text = agents.replace(
+            tail_marker,
+            "Other agents: honour this table.\n\n<!-- harness:end -->\n\n"
+            "Publishing a package is destructive in this repo.\n\n{{Add any repo-specific", 1)
+        (tmpd / "tail").mkdir()
+        (tmpd / "tail/AGENTS.md").write_text(tail_text)
+        expect(0, "  a repo's own destructive-ops tail AFTER the §9 marker → green",
+               str(tmpd / "tail"))
+
+        (tmpd / "tail-inside").mkdir()
+        (tmpd / "tail-inside/AGENTS.md").write_text(
+            agents.replace("Other agents: honour this table.",
+                           "Other agents: honour this table.\n\nSmuggled in.", 1))
+        expect(1, "  the same tail moved INSIDE the §9 region → red", str(tmpd / "tail-inside"))
+
+        (tmpd / "tailcut").mkdir()
+        (tmpd / "tailcut/AGENTS.md").write_text(
+            agents.replace("Other agents: honour this table.", "Other agents: ignore this table.", 1))
+        expect(1, "  §9 prefix region edited inside the prefix → red", str(tmpd / "tailcut"))
+
+        (tmpd / "unstamped").mkdir()
+        stripped = "\n".join(
+            l for l in agents.splitlines()
+            if not BEGIN.match(l.strip()) and not END.match(l.strip())) + "\n"
+        (tmpd / "unstamped/AGENTS.md").write_text(stripped)
+        expect(1, "  content in step but markers absent → red, not a pass",
+               str(tmpd / "unstamped"))
+        expect_out("every canonical section is present and matches",
+                   "  unstamped-but-in-step says so instead of listing bogus drift",
+                   str(tmpd / "unstamped"))
+
+        # The console-repo shape: no markers AND a §9 tail. Prefix mode has to tolerate the
+        # tail, or every unstamped repo reports a §9 drift that is not one.
+        (tmpd / "unstamped-tail").mkdir()
+        (tmpd / "unstamped-tail/AGENTS.md").write_text("\n".join(
+            l for l in tail_text.splitlines()
+            if not BEGIN.match(l.strip()) and not END.match(l.strip())) + "\n")
+        expect(1, "  unstamped + §9 tail → red for the markers", str(tmpd / "unstamped-tail"))
+        expect_out("every canonical section is present and matches",
+                   "  prefix mode tolerates the §9 tail rather than crying drift",
+                   str(tmpd / "unstamped-tail"))
+
+        run += 1
+        quoted = extract_regions(
+            "# t\n\ntext quoting `<!-- harness:begin v=1 -->` mid-line is prose.\n")[0]
+        if quoted == []:
+            print("  ✔   a marker quoted mid-line is prose, not a region boundary")
+        else:
+            fail += 1
+            print(f"  ✘   a mid-line marker was harvested as a region: {quoted}")
+
+        (tmpd / "missing").mkdir()
+        expect(1, "  directory with no AGENTS.md → red (not 'nothing to check')",
+               str(tmpd / "missing"))
+
+        run += 1
+        env = dict(os.environ, HARNESS_CANONICAL=str(tmpd / "absent.md"))
+        proc = subprocess.run([sys.executable, __file__], capture_output=True, text=True, env=env)
+        if proc.returncode == 2:
+            print("  ✔   canonical record absent → exit 2 (cannot run), never 0")
+        else:
+            fail += 1
+            print(f"  ✘   canonical record absent → expected exit 2, got {proc.returncode}")
+
+        run += 1
+        bad_hash = tmpd / "BADHASH"
+        bad_hash.write_text("version: 1\nsha256: " + "0" * 64 + "\n")
+        env = dict(os.environ, HARNESS_HASH=str(bad_hash))
+        proc = subprocess.run([sys.executable, __file__], capture_output=True, text=True, env=env)
+        if proc.returncode == 2:
+            print("  ✔   canonical text disagreeing with its recorded sha → exit 2, not a verdict")
+        else:
+            fail += 1
+            print(f"  ✘   canonical/sha mismatch → expected exit 2, got {proc.returncode}")
+
+    print()
+    if fail:
+        print(f"  ✘ SELF-TEST failed — {run} assertions, {fail} not as expected. exit 1")
+        return 1
+    print(f"  ✔ SELF-TEST passed — {run} assertions all as expected (red goes red, green goes green)")
+    print("    This proves the audit moves, not that any repo is clean. exit 0")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) > 1:
+        return 2 if print("usage: bin/check-harness-block [<path>|--emit-canonical|--emit-hash|--self-test]",
+                          file=sys.stderr) else 2
+    arg = argv[0] if argv else None
+    if arg == "--emit-canonical":
+        return emit_canonical()
+    if arg == "--emit-hash":
+        return emit_hash()
+    if arg == "--self-test":
+        return self_test()
+    if arg in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    if arg is not None and arg.startswith("-"):
+        print(f"unknown flag: {arg}", file=sys.stderr)
+        return 2
+    return check(arg)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
