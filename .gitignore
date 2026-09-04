@@ -76,6 +76,10 @@ venv/
 # it, and a script the workflow calls but git does not carry fails a fresh clone with a
 # missing-file error — which reads as a broken runner rather than as a missing line here.
 !/bin/test
+# bin/check-harness-block is admitted for the same reason, and it needs its own line:
+# `!/bin/check` is an exact match, not a prefix — without this the harness audit would be
+# untracked in every scaffolded repo, i.e. the audit would silently not exist.
+!/bin/check-harness-block
 *.exe
 *.dll
 *.so

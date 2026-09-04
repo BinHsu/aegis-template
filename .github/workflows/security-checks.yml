@@ -93,6 +93,13 @@ jobs:
       - name: Agent-policy checker
         run: bash bin/check
 
+      # bin/check already runs the harness-block clause. This step self-tests the clause's own
+      # script, which bin/check --self-test only exercises through its wiring — the 16 assertions
+      # that prove a drifted block goes red, an edit outside the block stays green, and a missing
+      # canonical record is exit 2 rather than a pass, live here.
+      - name: Harness-block audit self-test
+        run: python3 bin/check-harness-block --self-test
+
       # Phase gates. Uncomment and name a phase once it is defined in REQUIRED.json.
       # - run: python3 tests/test_evidence_artifacts.py --require {{PHASE}}
 

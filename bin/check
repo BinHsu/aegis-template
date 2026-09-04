@@ -4,9 +4,10 @@
 #   bin/check              run the checks
 #   bin/check --self-test  prove those checks can still fail (plant failure → red → restore → green)
 #
-# Template subset of the truewatch-ai-toolkit checker. Two clauses only:
+# Template subset of the truewatch-ai-toolkit checker. Three clauses only:
 #   1. Codex 32 KiB project-doc budget (silent truncation)
 #   2. obligation ↔ case correspondence (orphans red both ways; both-empty = not adopted = green)
+#   3. vendored harness block ↔ harness/AGENTS.harness.md (delegated to bin/check-harness-block)
 #
 # Do not add checks that target files this scaffold does not ship (git-hookspath against a
 # CI checkout, pattern indexes, sibling-repo routing, Telegram CLI headers, conventions.md).
@@ -287,6 +288,21 @@ check_case_correspondence() {
   return 1
 }
 
+# ── vendored harness block ───────────────────────────────────────
+# Delegated to bin/check-harness-block (python3: unified diffs and sha256 are not a bash job).
+# Wired here so one command still answers "do this repo's rules reach the next agent", and so
+# the harness clause is counted in the same tally as the other two.
+check_harness_block() { # check_harness_block <dir>
+  local dir="$1"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "  ✘ harness-block — python3 is not on PATH, so the vendored-block audit did not run"
+    echo "      A missing prerequisite is a skip, not a pass (AGENTS.md §12). It is reported red"
+    echo "      because 'the audit did not happen' and 'the block is clean' must not look alike."
+    return 1
+  fi
+  python3 "$REPO/bin/check-harness-block" "$dir"
+}
+
 run_all() {
   local dir="$1"
   echo "── whether this repo's rules reach the next agent ──"
@@ -294,6 +310,7 @@ run_all() {
   echo
   tally check_codex_budget         "$dir"
   tally check_case_correspondence  "$dir"
+  tally check_harness_block        "$dir"
 }
 
 tally() {
@@ -507,6 +524,18 @@ self_test() {
   expect green "  no CASE_FILE → use directory layout (green)" check_case_correspondence "$c/dir-and-file"
   CASE_FILE="CASES-x.md" expect red "  CASE_FILE set → overrides directory, reads the file (red)" \
     check_case_correspondence "$c/dir-and-file"
+
+  echo
+  echo "3. harness-block (the clause itself is self-tested by bin/check-harness-block --self-test;"
+  echo "   these two prove THIS script's wiring and tally still react to it)"
+  local h="${ST_TMP}/harness"
+  mkdir -p "$h/green" "$h/drift"
+  cp "$REPO/AGENTS.md" "$h/green/AGENTS.md"
+  expect green "  untouched copy of this repo's AGENTS.md → green" check_harness_block "$h/green"
+  sed 's/Write it vendor-neutral\./Write it however you like./' "$REPO/AGENTS.md" > "$h/drift/AGENTS.md"
+  expect red   "  one sentence changed inside the block → red"     check_harness_block "$h/drift"
+  expect_out has "## 3. Single source of status" "  red names the drifted section" \
+    check_harness_block "$h/drift"
 
   echo
   if [[ $ST_FAIL -gt 0 ]]; then

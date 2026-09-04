@@ -37,7 +37,21 @@ layer 3 (`AGENTS.cases/<ID>.md`) holds the history behind one obligation; there 
 read — the ID is the filename. `bin/check` refuses to go green on orphans either way, and passes
 when both sides are empty (not adopted, not broken). That is a different correspondence
 mechanism from `docs/validation/evidence/REQUIRED.json`. This scaffold seeds `AG-LAYER` (the
-split itself) and `AG-GIT` (a pointer to the global stay-put rule — not a second copy).
+split itself), `AG-GIT` (a pointer to the global stay-put rule — not a second copy) and
+`AG-HARNESS` (the vendored harness block, below).
+
+## The harness block is vendored, and vendored copies get a checksum
+
+Codex and Cursor do not expand `@` imports, so shared harness policy cannot live in one file and be
+imported — it has to exist **physically** in every repo made from this template. The copy is forced;
+trusting it is not. Everything between `<!-- harness:begin v=N -->` and `<!-- harness:end -->` in
+`AGENTS.md` is recorded in `harness/` and audited by `bin/check-harness-block`, which takes a path
+so a fresh clone of this template can audit a downstream repo's copy.
+
+🔴 **The audit warns and never rewrites.** Drift is bidirectional: on 2026-09-04 a consumer repo's
+§12 was measured *newer* than this template's, and an auto-sync would have replaced the good copy
+with the stale one. Which side moves is a human decision every time — reasoning in
+`AGENTS.cases/AG-HARNESS.md`.
 
 ## AGENTS.md is primary; CLAUDE.md is thin
 
@@ -62,6 +76,12 @@ status banner in a README is worse than none, because it is read with confidence
 - `bin/test --strict` — a declined case is a failure; the pre-push check
 - `bash bin/check --self-test` — prove the obligation↔case checker and the 32 KiB budget check can still fail
 - `bash bin/check` — Codex budget + obligation↔case correspondence (orphans red; both-empty green)
+  + vendored harness block
+- `python3 bin/check-harness-block [<path>/AGENTS.md]` — audit this repo's harness block, or another
+  repo's; drift prints a diff and exits 1, and it never writes to the file it audits
+- `python3 bin/check-harness-block --self-test` — prove that audit still goes red and still goes green
+- `python3 scripts/read-global-policy.py` — print `~/.claude/CLAUDE.md` and every `@`-imported file
+  in full; the bootstrap for any agent that does not expand `@` (Codex, Cursor)
 - `python3 scripts/security-benchmark.py` — benchmark status (stubs report `NOT-IMPLEMENTED`)
 - `bash scripts/safe-exec.sh rm -rf foo` — destructive-command preview + confirm + log
 - `bash scripts/audit-tool-registry.sh` — tool-layer hole detection, exit 1 on finding (needs `yq`)
@@ -93,7 +113,9 @@ AGENTS.md on its own).
 1. On GitHub: Settings → check **"Template repository"**.
 2. New project → **"Use this template"** → fresh repo, clean history, full harness inherited.
 3. `git config core.hooksPath .githooks` ; fill the `{{PLACEHOLDER}}` spots in `AGENTS.md`,
-   `CLAUDE.md`, `SECURITY.md`, `THREAT_MODEL.md` and `docs/handoff/CURRENT.md`.
+   `CLAUDE.md`, `SECURITY.md`, `THREAT_MODEL.md` and `docs/handoff/CURRENT.md`. Every placeholder
+   sits **outside** the harness markers, so filling them keeps `bin/check-harness-block` green — if
+   it goes red, you edited shared harness policy, and that change belongs upstream too.
 4. Pick an archetype direction (stateless-sync / async-decoupled / stateful), add workload code,
    wire the CI dependency-audit + lint steps for your language, specialise the benchmark stubs.
 5. Rewrite `docs/FILE-MAP.md` as you replace the scaffold — and keep adding a row per new file, in
@@ -108,6 +130,10 @@ Base scaffold the workload archetypes share. Specialise into:
 
 Platform substrate (landing-zone + platform tier) consumed via a standard interface, so a
 workload promotes from shared-cluster to dedicated-cluster without rewriting its integration.
+
+Every one of them carries the same harness block. `bin/check-harness-block <repo>/AGENTS.md`, run
+from a fresh clone of this template, is how you find out which of them has drifted — and reading the
+diff, rather than applying it, is how you find out which side was right.
 
 ---
 
