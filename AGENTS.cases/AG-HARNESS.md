@@ -23,7 +23,7 @@ the carrier is Markdown, so the region boundary is an HTML comment.
 
 🔴 **Drift is bidirectional, and the newer side is not reliably the template.**
 
-Measured 2026-09-04 across three repos: `truewatch-topic-inventory`'s §12 ("A check that cannot fail
+Measured 2026-09-04 across three repos: a consumer repo's §12 ("A check that cannot fail
 is worse than no check") had already been reduced to a six-line pointer at the `no-vacuous-checks`
 skill, while this template still carried the full 26-line copy. **The consumer was newer.** An
 auto-sync in either direction would have destroyed one of them silently: template→consumer would

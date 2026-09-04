@@ -52,7 +52,7 @@ treating that forced copy as trustworthy:
   16 self-test assertions.
 - `bin/check`: third clause, delegating to the above; three more self-test assertions prove the
   wiring and the tally still react.
-- **Backflowed** §12 from `truewatch-topic-inventory`, whose six-line pointer at the
+- **Backflowed** §12 from a consumer repo, whose six-line pointer at the
   `no-vacuous-checks` skill is *newer* than the 26 lines this template still carried.
 - **Pointers, not deletions:** §8 → `~/.claude/ENGINEERING.md` "When to stop, and when to keep
   going"; §11 step 4 → its "Records" diff-table rule; `CLAUDE.md` "Delegation boundary" → its
@@ -63,7 +63,7 @@ treating that forced copy as trustworthy:
   `~/.claude/ENGINEERING.md` (`BinHsu/dotClaude#34`) and left here **in full** — moving it is
   another repo's PR, and until it exists there this is the only copy.
 
-🔴 **Why the audit only warns.** Measured 2026-09-04: `truewatch-topic-inventory`'s §12 was *newer*
+🔴 **Why the audit only warns.** Measured 2026-09-04: a consumer repo's §12 was *newer*
 than this template's. An auto-sync in either direction would have destroyed the good copy silently.
 Which side moves is a human decision, every time. Reasoning: `AGENTS.cases/AG-HARNESS.md`.
 
@@ -133,10 +133,10 @@ python3 bin/check-harness-block --self-test        # 16 assertions, all as expec
 bash bin/check --self-test                         # 41 assertions (was 38), all as expected
 bash bin/check                                     # 3 clauses green: budget 46%, 3:3 cases, block v=1
 python3 bin/check-harness-block                    # green against this repo's own AGENTS.md
-python3 bin/check-harness-block ~/truewatch-topic-inventory/AGENTS.md   # exit 1, 6 of 13 sections
+python3 bin/check-harness-block <path-to-a-consumer-repo>/AGENTS.md   # exit 1, 6 of 13 sections
 ```
 
-The console repo was read only; `git -C ~/truewatch-topic-inventory status --porcelain` was empty
+The console repo was read only; `git -C ~/a consumer repo status --porcelain` was empty
 before and after.
 
 ## 6. Test results
@@ -151,7 +151,7 @@ before and after.
 | `harness-block`, `bin/check-harness-block --self-test` | 16/16 as expected |
 | `harness-block`, `bin/check --self-test` | 41/41 as expected |
 | `harness-block`, `bin/check` | green, 3 clauses, none yellow |
-| `harness-block`, audit vs `truewatch-topic-inventory` | exit 1 as designed — unstamped, and 6 of 13 canonical sections drifted or missing (that repo's PR is the third in `BinHsu/dotClaude#34`) |
+| `harness-block`, audit vs a consumer repo | exit 1 as designed — unstamped, and 6 of 13 canonical sections drifted or missing (that repo's PR is the third in `BinHsu/dotClaude#34`) |
 | `harness-block` PR CI | not yet observed — watch the run after push, per this repo's own §8 (don't
   stop at "pushed"; watch until it settles) |
 
@@ -175,7 +175,7 @@ gh pr checks --repo BinHsu/aegis-template <PR-number-for-harness-block>
 ```
 
 If green and the owner has not yet ruled, the next work in `BinHsu/dotClaude#34`'s sequence is the
-**console repo's** PR (`truewatch-topic-inventory`: stamp its block, split its §13, take this
+**console repo's** PR (a consumer repo: stamp its block, split its §13, take this
 template's `AG-LAYER` and `## git`) — and it is only unblocked once this one is merged, because it
 depends on the marker convention and on `harness/`. Do not start it here. Do not copy the
 ENGINEERING.md See / verdict / edit table into this template.
