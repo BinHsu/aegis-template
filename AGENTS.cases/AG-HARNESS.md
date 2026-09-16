@@ -4,6 +4,10 @@
 Layer-3 case for the `obligation:AG-HARNESS` anchor in `AGENTS.md`. **This file does not add an
 obligation.** It holds why the block exists, why the audit may only shout, and the commands.
 
+## 2026-09-16 supersession
+
+The v2 draft uses two regions and preserves the non-mutating drift audit. Its first region ends at the repository-boundary introduction (prefix mode); the final maintenance region is exact. The section numbers below describe v1. Original grounds remain below as history.
+
 ## Why the content is duplicated at all
 
 Claude Code expands `@AGENTS.md` from `CLAUDE.md`, and `~/.claude/CLAUDE.md` expands

@@ -32,3 +32,19 @@
 ## Sensitive surfaces in THIS repo
 
 {{List the actual auth/crypto/payments/PII surfaces here, each with an entry above.}}
+
+
+## Explicit command confirmation wrapper (2026-09-16)
+
+- **Asset:** Local files and a truthful pre-execution audit trail.
+- **Entry:** Executable and separate arguments passed to `scripts/safe-exec.sh`.
+- **Threat:** Flattening argv and using eval can execute shell metacharacters before
+  or after confirmation; substring detection can leave destructive commands ungated;
+  hand-built JSON can corrupt the receipt and logging failure can leave execution unaudited.
+- **Mitigation:** Gate every invocation, display escaped argv without executing a
+  preview command, append/fsync JSON before execution, then execute the original argv.
+  Logging failure refuses execution. This is not a sandbox or effect classifier;
+  explicitly requested shells can still run code and require caller review.
+- **Failure-mode tests:** Disposable files survive declined/EOF confirmation; special
+  characters remain literal; the child observes its receipt before acting; logging
+  failure prevents child execution; confirmed execution preserves exit status.

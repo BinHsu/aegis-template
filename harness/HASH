@@ -1,7 +1,7 @@
 # Canonical hash of the vendored harness block. Read by bin/check-harness-block.
 # sha256 covers each region's mode and body, in file order — not the comment lines.
 # Bumping version is a human act: edit AGENTS.md, re-emit both files, say why in the commit.
-version: 1
-sha256: bddce25cfd0c72937367c4dc9081e19aa22a35b0372581f004d530cf1475faa4
+version: 2
+sha256: 9f60cf9286f21b5a455edb1f1dc1a7d9f9acc15273fd85c05f18daa41af84775
 source: BinHsu/aegis-template harness/AGENTS.harness.md
-regions: 4
+regions: 2

@@ -5,6 +5,10 @@ Layer-3 case for the `obligation:AG-LAYER` anchor in `AGENTS.md`. **This file do
 
 This is the seed pair this template ships so a new repo is born with a visible shape, not only an empty checker. Numbered sections in `AGENTS.md` (§1–13) are **structural headings, not obligation IDs.** Adopt three-layer for a further rule by adding `<!-- obligation:<ID> -->` and a matching case in the same change; `bin/check` turns red on orphans.
 
+## 2026-09-16 supersession
+
+The safety effect remains in AGENTS.md and SECURITY.md. Task-specific skills hold procedures; conventions is on-demand navigation. The numbered section references below describe v1, not additional active obligations. Original grounds remain below as history.
+
 ## The starting point is layering; the budget is a catalyst (owner, 2026-08-23)
 
 > The starting point is one thing: we need the concept of layers. **What the model reads is a boundary, and it must keep doubting**, then know where the directory is, and knowing the directory how to **open only the associated** case.

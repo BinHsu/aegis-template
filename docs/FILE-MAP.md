@@ -10,13 +10,12 @@ follow-up commit. A `PostToolUse` hook (`scripts/check-file-map.sh`) notices whe
 path is missing from this file and says so, but a hook can only nag — it cannot write the row. If a
 file genuinely does not belong in the index, say so explicitly rather than skipping it silently.
 
-**This is not a curated reading list.** `README.md` and `docs/handoff/CURRENT.md` tell a reader
+**This is not a curated reading list.** `README.md` and task-specific skills tell a reader
 *what to open next* for a given goal, and deliberately mention only a fraction of the repository.
 This file is the exhaustive manifest and makes no reading recommendations. Two different jobs. Do
 not merge them.
 
-**Status is not here.** Project status lives in exactly one place, `docs/handoff/CURRENT.md`
-(`AGENTS.md` §3). This index describes what each file is *for*, never how far along it is. Where a
+**Status is not here.** Git status/history and scoped PRs/issues carry live work. This index describes what each file is *for*, never how far along it is. Where a
 row says "stub" or "placeholder" that is a statement about the file's content, not about project
 progress — a stub that reads like real coverage is precisely what causes someone to skip it and
 write the same thing again.
@@ -29,11 +28,11 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 
 | Path | What it is for | Who reads it |
 |---|---|---|
-| `AGENTS.md` | The operating contract for every agent and human: three-layer preamble, read-first order, single-source-of-status, handoff protocol, evidence standard, decision records, never-commit list, tool-access classes, destructive-action protocol, and the rule against checks that cannot fail. Tool-agnostic. Numbered sections are structural headings, not obligation IDs. | Any agent or contributor, first |
-| `CLAUDE.md` | Claude Code-only mechanics on top of `AGENTS.md`, which it imports on line 1. Permissions, delegation boundary, conflict resolution. Holds no shared policy. | Claude Code sessions |
+| `AGENTS.md` | The v2 operating contract: scope, data and consent boundaries, evidence, recoverability and harness maintenance. | Any agent or contributor |
+| `CLAUDE.md` | Claude-specific import, permission-pattern and hook adapter; shared policy stays in AGENTS.md. | Claude Code sessions |
 | `README.md` | What this scaffold is, the 7-practice map from practice to file, and how to specialise it. States no project status by design. | Forkers, first-time readers |
 | `SECURITY.md` | Security ground rules an agent must not guess at: secrets, untrusted input, external actions, dependencies. Contains `{{placeholders}}` to fill per project. | Reviewers; anyone touching secrets or external systems |
-| `PRODUCT_SENSE.md` | The product red line that hidden destructive actions are a defect, plus the preview/confirm/log/abort protocol. Restates the protocol also given in `AGENTS.md` §10. | Any agent before a destructive command |
+| `PRODUCT_SENSE.md` | No hidden destruction; routes the confirmation protocol to AGENTS.md and records the v2 supersession. | Tool designers and operators |
 | `.gitignore` | Declares what must never be committed. **Default-deny at the top**: `.*` blocks every dot-path, then a small allowlist (`!.gitignore`, `!.claude/`, `!.githooks/`, `!.github/`, `!.semgrep/`) re-admits the tracked scaffold directories — closes the 14/18-credential-dotfile gap a pure blocklist left open (issue #5). The block's own comments carry the two silent traps: position (`.*` must stay first, last-match-wins) and directory-not-file negation. `/bin/*` ignores build output in that directory; `!/bin/check` allow-lists the agent-policy checker (a negation cannot re-include a file whose *parent directory* is excluded — `AGENTS.md` §7). Adding a new tracked dotfile or dot-directory needs its own `!` line in the same commit. | Anyone adding a file type or dotfile that might carry secrets |
 | `docs/FILE-MAP.md` | This file. The exhaustive manifest. | Anyone about to create a new file |
 | `bin/check` | Harness-independent checker, three clauses: Codex 32 KiB budget (silent truncation, 85% warn band exits 3), obligation↔case correspondence (orphans red both ways; both-empty = not adopted = green), and the vendored harness block (delegated to `bin/check-harness-block`). `--self-test` plants synthetic trees and proves each clause can still fail. Template subset — does not check targets this scaffold does not ship. | CI; anyone adding or editing an obligation |
@@ -78,11 +77,12 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 
 | Path | What it is for | Who reads it |
 |---|---|---|
+| `docs/reviews/2026-09-15-harness-review.md` | Personal clause-by-clause harness review; recommendations, not active policy or accepted decisions. | Owner and policy maintainer |
 | `docs/SECURITY_PRACTICES.md` | Why the harness exists: the three-layer model (rule / execution / verification) and the mapping from each practice to the file implementing it. Credits the external framework it adapts. | Anyone asking why a control is here rather than what it does |
 | `docs/THREAT_MODEL.md` | STRIDE-lite entry template, one per security-sensitive surface, plus the agent-era additions. **Template only until a surface exists.** | Anyone changing auth, crypto, payments or PII handling |
 | `docs/design/README.md` | Rule that open proposals live in `docs/design/`, not in decision records, and must be marked `AWAITING DECISION`. | Anyone writing up an undecided question |
 | `docs/design/acceptance-criteria.md` | How to write acceptance criteria an agent can actually run: the Group A / Group B split, and how a Group B step is made auditable by a Group A command. | Anyone defining a milestone, phase or exit gate |
-| `docs/handoff/CURRENT.md` | The single source of project status and the exact next safe action. The file that lets a cold agent or human resume with no chat history. | Every worker, before anything else |
+| `docs/handoff/CURRENT.md` | Historical handoffs; old next actions are not current authorization. | Readers investigating relevant prior work |
 | `docs/validation/evidence/README.md` | The fixed artifact format for a Group B observation: header fields, redaction rules, worked template. | Anyone recording a manual or instrumented verification |
 | `docs/validation/evidence/REQUIRED.json` | Machine-readable manifest of which artifacts each phase must produce, plus the field, tag and forbidden-pattern configuration the validator enforces. Authoritative — the validator rejects artifacts it does not list. | The validator; anyone adding a phase or an artifact |
 
@@ -95,7 +95,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 | `scripts/check-file-map.sh` | `PostToolUse(Write)` hook backing this index. Nags when a newly written, non-ignored, in-repo path is missing here. Never blocks, always exits 0. | Claude Code (automatically) |
 | `scripts/cleanup-scanner.py` | Real secret-residue scan of the working tree and staged diff: sensitive filenames, tracked `.env` files, hardcoded-credential patterns. Exit 1 on any finding. Pure stdlib. | CI; the pre-commit hook; anyone ending a session |
 | `scripts/read-global-policy.py` | Prints `~/.claude/CLAUDE.md` and every file it pulls in with a leading `@path`, recursively. The bootstrap for agents that do not expand `@` imports — Codex, Cursor, anything new — so "the global rules did not load" becomes a non-zero exit instead of silence. Named in `AGENTS.md`'s banner. Pure stdlib. | Any non-Claude-Code agent, before its first action |
-| `scripts/safe-exec.sh` | Wraps a destructive command in preview → confirm → log → execute, so destruction is never the silent default. | Anyone aliasing a dangerous command |
+| `scripts/safe-exec.sh` | Explicit argv wrapper: previews every invocation, requires confirm, writes a JSON receipt before execution and never evals command text. Not a sandbox. | Operators with current action-specific consent |
 | `scripts/security-benchmark.py` | Security asserted as a benchmark rather than a review item. **Ships with three unimplemented benchmarks that report `NOT-IMPLEMENTED` and are never counted as passes.** `--require-implemented` turns it into a gate once wired. | CI; whoever specialises the benchmarks per stack |
 
 ## `tests/` — toolchain-independent checks
@@ -109,7 +109,7 @@ The rows below describe the scaffold as shipped. **Replace them as you replace t
 
 | Path | What it is for | Who reads it |
 |---|---|---|
-| `harness/README.md` | How to re-emit the two generated files and the one-line reason they exist. Points at the rule (`AGENTS.md` "harness block") and the reasoning (`AGENTS.cases/AG-HARNESS.md`) rather than restating either. | Anyone about to hand-edit this directory |
+| `harness/README.md` | How to re-emit the two generated files and the one-line reason they exist. Points at the rule (`AGENTS.md` "Maintaining the harness") and the reasoning (`AGENTS.cases/AG-HARNESS.md`) rather than restating either. | Anyone about to hand-edit this directory |
 | `harness/AGENTS.harness.md` | **Generated.** The harness regions extracted from `AGENTS.md`, each tagged `mode=exact` or `mode=prefix`. The baseline every consumer copy is diffed against. No agent loads it. | `bin/check-harness-block` |
 | `harness/HASH` | **Generated.** `version:` / `sha256:` / `source:` / `regions:` for the canonical above. A mismatch between this and the text is exit 2 (no trustworthy baseline), never a verdict. | `bin/check-harness-block` |
 
@@ -129,3 +129,11 @@ member, and add its rows here in the same change.
 | `docs/ADR/` | Decision records, MADR format, plus `INDEX.md` routing by reader goal (`AGENTS.md` §6) |
 | `docs/validation/evidence/*.md` | The Group B evidence artifacts themselves, one per observation |
 | `.agent-context/` | `destructive-log.jsonl` and other operator-local agent state. Gitignored — never committed |
+
+## On-demand procedures
+
+| Path | Purpose | Reader |
+|---|---|---|
+| `conventions.md` | Navigation to on-demand procedures, not additional policy. | Maintainers |
+| `.agents/skills/harness-maintenance/SKILL.md` | Shared canonical, case, evidence and wrapper maintenance procedures. | Harness maintainer |
+| `tests/test_safe_exec_preview.py` | Temporary-directory tests for argv integrity, refusal, durable logging and execution order. | Wrapper maintainer |

@@ -1,4 +1,8 @@
-# Handoff — current state
+# Handoff — historical record
+
+> 2026-09-16 supersession: AGENTS.md v2 assigns live work to git status/history
+> and scoped PRs/issues. All status authority, standing instructions and next
+> actions below are retained as history, not current authorization.
 
 > **This file is the single source of truth for project status.** If any other document disagrees
 > with it, this one wins and the drift should be fixed. See `AGENTS.md` §3.

@@ -532,9 +532,9 @@ self_test() {
   mkdir -p "$h/green" "$h/drift"
   cp "$REPO/AGENTS.md" "$h/green/AGENTS.md"
   expect green "  untouched copy of this repo's AGENTS.md → green" check_harness_block "$h/green"
-  sed 's/Write it vendor-neutral\./Write it however you like./' "$REPO/AGENTS.md" > "$h/drift/AGENTS.md"
+  sed 's/Preserve unrelated work\./Ignore unrelated work./' "$REPO/AGENTS.md" > "$h/drift/AGENTS.md"
   expect red   "  one sentence changed inside the block → red"     check_harness_block "$h/drift"
-  expect_out has "## 3. Single source of status" "  red names the drifted section" \
+  expect_out has "## Scope and recoverability" "  red names the drifted section" \
     check_harness_block "$h/drift"
 
   echo

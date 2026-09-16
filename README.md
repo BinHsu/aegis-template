@@ -14,7 +14,7 @@ organized in three layers: **Rule → Execution → Verification.**
 
 | # | Practice | Layer | Files |
 |---|---|---|---|
-| 1 | **Least-privilege tool access** | Execution | `.claude/settings.json` (allow/deny), `AGENTS.md` (3-way tool table) |
+| 1 | **Least-privilege tool access** | Execution | `.claude/settings.json` (allow/deny), `AGENTS.md` (effect-based permissions) |
 | 2 | **Security rules not buried mid-file** | Rule | `AGENTS.md` (primary policy, all agents), `CLAUDE.md` (thin Claude-only router), `SECURITY.md` at top; `scripts/audit-agent-compliance.sh` (monthly drift test) |
 | 3 | **SECURITY.md pins the rules** | Rule | `SECURITY.md` (4 categories: secrets / untrusted input / external actions / dependencies) |
 | 4 | **Sandbox isolation + review-feedback promotion** | Execution / Verification | `.githooks/pre-commit` (secret block), `.semgrep/` (promoted review rules), CI runs them |
@@ -23,8 +23,8 @@ organized in three layers: **Rule → Execution → Verification.**
 | 7 | **Tool safety is production-grade** | Execution | `tools/registry.yaml` (single source of truth), `scripts/audit-tool-registry.sh` |
 
 Cross-cutting: `docs/THREAT_MODEL.md` (Practice 3/4 — entry required for auth/crypto/payments/PII
-surfaces) and `docs/handoff/CURRENT.md` (single source of project status, and the file that lets a
-cold agent or human resume with no chat history).
+surfaces) and `docs/handoff/CURRENT.md` (historical handoffs and observations, not
+current authority or permission to resume work).
 
 Two more that are not security controls but keep a cold agent from wasting a day:
 `docs/FILE-MAP.md` (exhaustive per-file index, so nobody re-creates a file that already exists under
@@ -56,16 +56,15 @@ with the stale one. Which side moves is a human decision every time — reasonin
 ## AGENTS.md is primary; CLAUDE.md is thin
 
 `AGENTS.md` holds all shared policy for every agent and human. `CLAUDE.md` imports it on **line 1**
-and contains nothing but Claude-specific mechanics — permissions, delegation boundary, transcript
-handling. Claude Code does not read `AGENTS.md` on its own, which is the only reason the import
+and contains nothing but Claude-specific mechanics — permission patterns and hooks. Claude Code does not read `AGENTS.md` on its own, which is the only reason the import
 exists.
 
 A rule written in both files drifts, and the copy that goes stale is the one that gets read. So:
 shared rule → `AGENTS.md`; Claude-only mechanism → `CLAUDE.md`; machine-wide discipline →
 `~/.claude/CLAUDE.md`.
 
-The same principle governs status, which is written **only** in `docs/handoff/CURRENT.md`. A stale
-status banner in a README is worse than none, because it is read with confidence.
+Git status/history and scoped PRs/issues carry live work. Historical handoff entries
+retain their evidence without granting standing consent for their old next actions.
 
 ## What's runnable today (stack-agnostic)
 
@@ -89,7 +88,7 @@ status banner in a README is worse than none, because it is read with confidence
 - CI (`security-checks.yml`) — wires all of the above
 
 **Stubs to specialise per stack.** Every one of them announces itself rather than reporting a pass —
-`AGENTS.md` §12, the rule this scaffold most needs you to keep:
+the evidence principle in `AGENTS.md`:
 
 - `security-benchmark.py` — 3 unimplemented benchmarks; add `--require-implemented` to CI once wired
 - `tools/registry.yaml` — example entries; delete the tools you do not call

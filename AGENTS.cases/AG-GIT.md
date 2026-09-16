@@ -3,6 +3,10 @@
 
 Layer-3 case for the `obligation:AG-GIT` anchor in `AGENTS.md`. **This file does not add an obligation.**
 
+## 2026-09-16 supersession
+
+Git status/history and scoped PRs/issues carry live work. Historical account-wide startup discovery and CURRENT-only status instructions do not apply; current scope must be resolved first. Original grounds remain below as history.
+
 ## The home is not this template
 
 Owner, 2026-08-24: 「沒特別要求跨 branch 跨 repo 就請專心，這條補進 git 是唯一控管那一段」.

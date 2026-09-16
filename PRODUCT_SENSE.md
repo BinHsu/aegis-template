@@ -1,37 +1,25 @@
-# PRODUCT_SENSE.md
+# Product principle: no hidden destructive actions
 
-> Product-judgment red lines for agent-driven work. Distinct from `SECURITY.md` (security
-> rules): this file is about **product behaviour that must never surprise the user** — the
-> placement itself signals "hidden destructive action is a product principle, not just a
-> security one".
+Destruction must never be a surprising side effect. A control labelled "Optimize"
+must not silently truncate a table, and an agent must not report completion while
+quietly deleting files. Preview must be the default for a destructive tool;
+execution needs an explicit action.
 
-## No-Go Pattern #1 — Hidden destructive actions
+Follow AGENTS.md's "Permissions and destructive actions" contract for exact targets,
+recoverability, confirmation and pre-execution logging. Outbound publication and
+paid operations require their own current consent; they are not automatically
+irreversible destruction. Confirmation may arrive in a subsequent reply for the
+same preview. A reviewed script does not itself grant consent.
 
-A destructive action removes data, overwrites without backup, or changes state visible to
-other users (`rm`, `drop`, `delete`, `truncate`, `git reset --hard`, force push, deploy,
-send message, charge payment).
+`scripts/safe-exec.sh` accepts an executable and separate arguments, previews those
+arguments, requires literal `confirm`, logs before executing and preserves argv.
+It gates every invocation and performs no automatic plan or command-string eval.
+It is not a sandbox: it cannot validate the meaning or downstream effects of an
+explicitly invoked shell or program. Callers must still inspect exact targets.
 
-**These must NEVER be hidden.** Anti-patterns (all forbidden):
-- An agent prints "done" but quietly deleted files.
-- A UI control labelled "Optimize" that actually truncates a table.
-- A script whose **default** behaviour is destructive and needs `--dry-run` to preview
-  (the order is reversed — preview must be the default; destruction needs an explicit flag).
+## 2026-09-16 supersession
 
-## Destructive Action Protocol (mandatory)
-
-For every destructive action you MUST, in order:
-1. **Preview** — print exactly what will change: "About to delete/overwrite X, Y, Z. This is irreversible."
-2. **Confirm** — stop and wait for the user to type **`confirm`** (not "ok", not "yes", not "go ahead").
-3. **Log before executing** — append to `.agent-context/destructive-log.jsonl` BEFORE running.
-4. **Abort if unconfirmed** — if the user does not confirm in the same turn, abort.
-
-If you are about to run a destructive command and have NOT done all four, STOP and re-read this.
-
-Enforcement: route destructive commands through `scripts/safe-exec.sh` (preview + confirm +
-log + execute). The cross-project global rule (`~/.claude/CLAUDE.md`) carries the same posture.
-
-## Real incidents this prevents
-
-The Replit / PocketOS / DataTalks.Club database-wipe incidents share one pattern: the
-destructive action was **hidden** (agent did `git reset --hard` / dropped the DB without a
-preview-and-confirm step). This protocol would have caught ~90% of them.
+This replaces the duplicated same-turn protocol and classification of every
+externally visible action as destructive. The earlier approximate incident-
+prevention percentage had no demonstrated measurement and is withdrawn; the
+no-hidden-destruction requirement is retained.

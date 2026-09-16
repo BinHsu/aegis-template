@@ -39,8 +39,8 @@ the same trap `bin/check` avoids for `<!-- obligation:<ID> -->` by keeping the a
 REGION MODES
 A region that stops at a section boundary is `exact`: the target's section must match byte for byte.
 A region that stops in the middle of a section is `prefix`: the canonical text must be the opening
-of the target's section, and the target may continue. §9 is the reason — its table is the same in
-every repo and its list of repo-specific destructive operations is the repo's own.
+of the target's section, and the target may continue. The shared permissions section allows
+repository-specific boundaries after its closing marker.
 """
 
 from __future__ import annotations
@@ -372,13 +372,14 @@ def self_test() -> int:
         (tmpd / "green/AGENTS.md").write_text(agents)
         expect(0, "  byte-identical copy → green", str(tmpd / "green"))
 
+        assert agents.count("Preserve unrelated work.") == 1, "drift fixture anchor missing or ambiguous"
         (tmpd / "drift").mkdir()
         (tmpd / "drift/AGENTS.md").write_text(
-            agents.replace("Write it vendor-neutral.", "Write it however you like.", 1))
+            agents.replace("Preserve unrelated work.", "Ignore unrelated work.", 1))
         expect(1, "  one sentence changed inside the block → red", str(tmpd / "drift"))
-        expect_out("## 3. Single source of status", "  red names the drifted section",
+        expect_out("## Scope and recoverability", "  red names the drifted section",
                    str(tmpd / "drift"))
-        expect_out("Write it however you like", "  red prints the actual diff line",
+        expect_out("Ignore unrelated work", "  red prints the actual diff line",
                    str(tmpd / "drift"))
 
         (tmpd / "outside").mkdir()
@@ -386,9 +387,8 @@ def self_test() -> int:
             agents.replace("## 1. What this repo is", "## 1. What this service does", 1))
         expect(0, "  edit OUTSIDE the block (§1, repo-local) → green", str(tmpd / "outside"))
 
-        # §9's region stops mid-section on purpose: the table is every repo's, the list of
-        # repo-specific destructive operations is that repo's own. Adding the latter after the
-        # closing marker must stay green; adding anything before it must not.
+        # The permissions region stops before repository-specific boundaries. Additions
+        # after the marker must stay green; additions inside the region must not.
         #
         # This must not assume what follows the marker: in this template it is still the
         # scaffold placeholder (`{{Add any repo-specific...}}`), but in any repo that has
@@ -397,25 +397,25 @@ def self_test() -> int:
         # (aegis-template#11). Insert right after the blank line that follows
         # `<!-- harness:end -->` and leave whatever comes next, placeholder or real text,
         # exactly where it is.
-        tail_marker = "Other agents: honour this table.\n\n<!-- harness:end -->\n\n"
+        tail_marker = "Additional repository boundaries follow below.\n\n<!-- harness:end -->\n\n"
         assert agents.count(tail_marker) == 1
         tail_text = agents.replace(
             tail_marker, tail_marker + "Publishing a package is destructive in this repo.\n\n", 1)
         (tmpd / "tail").mkdir()
         (tmpd / "tail/AGENTS.md").write_text(tail_text)
-        expect(0, "  a repo's own destructive-ops tail AFTER the §9 marker → green",
+        expect(0, "  a repo's own destructive-ops tail AFTER the permissions section marker → green",
                str(tmpd / "tail"))
 
         (tmpd / "tail-inside").mkdir()
         (tmpd / "tail-inside/AGENTS.md").write_text(
-            agents.replace("Other agents: honour this table.",
-                           "Other agents: honour this table.\n\nSmuggled in.", 1))
-        expect(1, "  the same tail moved INSIDE the §9 region → red", str(tmpd / "tail-inside"))
+            agents.replace("Additional repository boundaries follow below.",
+                           "Additional repository boundaries follow below.\n\nSmuggled in.", 1))
+        expect(1, "  the same tail moved INSIDE the permissions section region → red", str(tmpd / "tail-inside"))
 
         (tmpd / "tailcut").mkdir()
         (tmpd / "tailcut/AGENTS.md").write_text(
-            agents.replace("Other agents: honour this table.", "Other agents: ignore this table.", 1))
-        expect(1, "  §9 prefix region edited inside the prefix → red", str(tmpd / "tailcut"))
+            agents.replace("Additional repository boundaries follow below.", "Ignore repository boundaries.", 1))
+        expect(1, "  the permissions section prefix region edited inside the prefix → red", str(tmpd / "tailcut"))
 
         (tmpd / "unstamped").mkdir()
         stripped = "\n".join(
@@ -428,15 +428,15 @@ def self_test() -> int:
                    "  unstamped-but-in-step says so instead of listing bogus drift",
                    str(tmpd / "unstamped"))
 
-        # The console-repo shape: no markers AND a §9 tail. Prefix mode has to tolerate the
-        # tail, or every unstamped repo reports a §9 drift that is not one.
+        # An unstamped consumer can still have a repository-specific permissions tail.
+        # Prefix mode must tolerate that tail while reporting the missing markers.
         (tmpd / "unstamped-tail").mkdir()
         (tmpd / "unstamped-tail/AGENTS.md").write_text("\n".join(
             l for l in tail_text.splitlines()
             if not BEGIN.match(l.strip()) and not END.match(l.strip())) + "\n")
-        expect(1, "  unstamped + §9 tail → red for the markers", str(tmpd / "unstamped-tail"))
+        expect(1, "  unstamped + the permissions section tail → red for the markers", str(tmpd / "unstamped-tail"))
         expect_out("every canonical section is present and matches",
-                   "  prefix mode tolerates the §9 tail rather than crying drift",
+                   "  prefix mode tolerates the permissions section tail rather than crying drift",
                    str(tmpd / "unstamped-tail"))
 
         run += 1

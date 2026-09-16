@@ -16,4 +16,4 @@ bin/check-harness-block                  # must be green before you commit
 
 Why this exists rather than an `@` import, why the audit only ever warns, and what the record
 cannot tell you: `AGENTS.cases/AG-HARNESS.md`. The rule itself is `AGENTS.md`, section
-"harness block".
+"Maintaining the harness".
